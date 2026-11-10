@@ -1,0 +1,31 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Generate config.js securely
+        run: |
+          echo "const CONFIG = {" > config.js
+          echo "  CLIENT_ID: '${{ secrets.CLIENT_ID }}'," >> config.js
+          echo "  DRIVE_FILE_ID: '${{ secrets.DRIVE_FILE_ID }}'" >> config.js
+          echo "};" >> config.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
