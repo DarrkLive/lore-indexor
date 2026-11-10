@@ -29,7 +29,11 @@
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
     
-    aside { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 320px; }
+    aside { 
+      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+      width: 320px; 
+      touch-action: pan-y; 
+    }
     aside.collapsed { width: 0px !important; padding: 0 !important; border: none !important; overflow: hidden !important; }
     
     .lore-link { color: #60a5fa; text-decoration: underline; cursor: pointer; }
@@ -201,6 +205,7 @@
       initGoogleDriveSDK();
     };
 
+    // Mobile viewport persistence & bfcache restoration
     window.addEventListener('pageshow', function (event) {
       if (event.persisted) {
         window.dispatchEvent(new Event('resize'));
@@ -209,6 +214,32 @@
         }
       }
     });
+
+    // Sidebar Touch Swipe Gestures
+    let touchStartX = 0;
+    let touchCurrentX = 0;
+    const sidebar = document.getElementById('sidebar');
+
+    document.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      touchCurrentX = e.touches[0].clientX;
+      const diffX = touchCurrentX - touchStartX;
+
+      // Swipe left to close sidebar when open
+      if (!sidebarCollapsed && diffX < -70 && touchStartX < 350) {
+        toggleSidebar();
+        touchStartX = touchCurrentX;
+      }
+      
+      // Swipe right from left edge to open sidebar when collapsed
+      if (sidebarCollapsed && diffX > 70 && touchStartX < 40) {
+        toggleSidebar();
+        touchStartX = touchCurrentX;
+      }
+    }, { passive: true });
 
     function initGoogleDriveSDK() {
       if (window.google) {
