@@ -1,17 +1,26 @@
 # Lore Indexor 📚
 
-Lore Indexor is a web application designed to load, display, and manage master lore tracking files directly through the Google Drive API.
+Lore Indexor is a lightweight web application designed to load, display, and manage master lore tracking files directly through the Google Drive API.
 
-The project utilizes a zero-exposure security architecture: sensitive API credentials (`CLIENT_ID` and `DRIVE_FILE_ID`) are stored in GitHub Repository Secrets and injected dynamically at build time via GitHub Actions, keeping the public repository fully secure.
+The project features a fully responsive mobile layout with `100dvh` support, mobile browser cache recovery (`pageshow`), touch-sensitive sidebar swipe gestures, and zero-exposure security architecture.
 
 ---
 
 ## 🏗 Project Architecture
 
-- **`index.html`**: Main user interface, app logic, and Google Drive API integration scripts.
+- **`index.html`**: Main user interface, app logic, touch swipe handlers, and Google Drive API integration.
 - **`.github/workflows/deploy.yml`**: GitHub Actions CI/CD pipeline that injects secrets, generates a temporary `config.js`, and deploys the build to GitHub Pages.
 - **`.gitignore`**: Excludes local `config.js` files to prevent credentials from being tracked or pushed to Git.
-- **`config.js`** *(Dynamically Generated)*: Holds `CLIENT_ID` and `DRIVE_FILE_ID` runtime variables during local development or production CI/CD builds.
+- **`config.js`** *(Dynamically Generated)*: Holds `CLIENT_ID` and `DRIVE_FILE_ID` runtime variables during local development or production builds.
+
+---
+
+## 📱 Mobile & Touch Features
+
+- **Swipe Gestures:** 
+  - Swipe **left** across the sidebar to collapse it.
+  - Swipe **right** from the far left edge of the screen to open the sidebar.
+- **State Persistence:** Automatically re-initializes view states and layout bounds when restored from mobile browser backgrounding (`bfcache`).
 
 ---
 
@@ -28,11 +37,11 @@ Sensitive credentials must be added to your repository before deployment:
 
 ## 🌐 Google Cloud Console Authorized URLs
 
-To prevent `Error 400: origin_mismatch` during Google Sign-In, both your local development server and live GitHub Pages domains must be added to your Google Cloud Console.
+To prevent `Error 400: origin_mismatch` during Google Sign-In, ensure your domains are added to your Google Cloud Console:
 
 1. Open the [Google Cloud Console Credentials Page](https://console.cloud.google.com/apis/credentials).
 2. Click on your **OAuth 2.0 Client ID** to edit settings.
-3. Under **Authorized JavaScript origins**, click **Add URI** and add the following URLs:
+3. Under **Authorized JavaScript origins**, add your root domains:
 
 | Environment | Authorized JavaScript Origin URI |
 | :--- | :--- |
@@ -40,7 +49,7 @@ To prevent `Error 400: origin_mismatch` during Google Sign-In, both your local d
 | **Local Development** | `http://localhost:8000` |
 | **Local IP Alternative** | `http://127.0.0.1:8000` |
 
-> **Note:** Do not include subpaths or repository names (e.g., `/lore-indexor/`) in the Authorized JavaScript origins section—only enter the root protocol and domain name. Save and allow up to 2 minutes for origin changes to update.
+> **Note:** Do not include subpaths (e.g., `/lore-indexor/`). Save and allow up to 2 minutes for changes to update.
 
 ---
 
@@ -48,67 +57,29 @@ To prevent `Error 400: origin_mismatch` during Google Sign-In, both your local d
 
 Every push to the `main` branch automatically triggers `.github/workflows/deploy.yml`. 
 
-The deployment pipeline uses current GitHub Action dependencies:
+The deployment pipeline uses GitHub Action dependencies:
 - `actions/checkout@v4`
 - `actions/configure-pages@v4`
 - `actions/upload-pages-artifact@v3`
 - `actions/deploy-pages@v4`
 
-### Action Workflow Script (`.github/workflows/deploy.yml`)
+---
 
-```yaml
-name: Deploy to GitHub Pages
+## 💻 Local Development Setup
 
-on:
-  push:
-    branches: [ main ]
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Generate config.js securely
-        run: |
-          echo "const CONFIG = {" > config.js
-          echo "  CLIENT_ID: '${{ secrets.CLIENT_ID }}'," >> config.js
-          echo "  DRIVE_FILE_ID: '${{ secrets.DRIVE_FILE_ID }}'" >> config.js
-          echo "};" >> config.js
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-```
 To test changes locally on your machine before pushing to GitHub:
 
-    Create a config.js file in the root folder:
-    JavaScript
+1. Create a `config.js` file in the root folder:
+   ```javascript
+   const CONFIG = {
+     CLIENT_ID: 'YOUR_LOCAL_CLIENT_ID',
+     DRIVE_FILE_ID: 'YOUR_LOCAL_FILE_ID'
+   };
 
-    const CONFIG = {
-      CLIENT_ID: 'YOUR_LOCAL_CLIENT_ID',
-      DRIVE_FILE_ID: 'YOUR_LOCAL_FILE_ID'
-    };
+   ```
 
-    Start a local HTTP web server:
-    Bash
+  2. Start a local HTTP web server:
 
-    python3 -m http.server 8000
+python3 -m http.server 8000
 
-    Navigate to http://127.0.0.1:8000 or http://localhost:8000 in your web browser.
-
-    .gitignore ensures your local config.js file is never uploaded to GitHub.
+3. Navigate to http://127.0.0.1:8000 or http://localhost:8000 in your web browser.
