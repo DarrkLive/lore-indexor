@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lore Indexor - Master Archive & Editor</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            darkbg: '#0f172a',
+            cardbg: '#1e293b',
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Identity Services SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Load Private Config -->
+  <script src="config.js"></script>
+  <style>
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+    
+    aside { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 320px; }
+    aside.collapsed { width: 0px !important; padding: 0 !important; border: none !important; overflow: hidden !important; }
+    
+    .lore-link { color: #60a5fa; text-decoration: underline; cursor: pointer; }
+    .lore-link:hover { color: #93c5fd; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 overflow-hidden relative">
+
+  <!-- Main App Layout -->
+  <div class="flex flex-1 h-full w-full overflow-hidden relative">
+    
+    <!-- Sidebar -->
+    <aside id="sidebar" class="bg-slate-900 border-r border-slate-800 flex flex-col p-4 gap-3 select-none z-20 h-full flex-shrink-0 relative">
+      <!-- Header & Collapse Toggle -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-shrink-0">
+        <div class="overflow-hidden">
+          <h1 class="text-xs md:text-sm font-black tracking-widest text-emerald-400 whitespace-nowrap">LORE INDEXOR</h1>
+          <p class="text-[9px] text-slate-400 tracking-wider whitespace-nowrap">Master Archive v4.9</p>
+        </div>
+        <button onclick="toggleSidebar()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 text-xs transition shadow-sm" title="Collapse Sidebar">
+          <span class="font-bold">◀</span>
+        </button>
+      </div>
+
+      <!-- Sidebar Content Container -->
+      <div class="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 text-xs custom-scrollbar min-h-0">
+        
+        <!-- Drive Auth & Sync Controls -->
+        <div class="flex flex-col gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/80">
+          <button id="authBtn" onclick="handleAuthClick()" class="w-full py-2 px-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap">
+            <span>Connect Google Drive</span>
+          </button>
+          <div class="flex gap-1.5">
+            <button onclick="fetchDriveFile()" class="flex-1 py-1 px-2 bg-slate-800 hover:bg-slate-700 text-[11px] font-medium rounded border border-slate-700 text-slate-300 transition">
+              Fetch Drive
+            </button>
+            <button onclick="saveDriveFile()" class="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-500 text-[11px] font-semibold rounded text-white transition shadow-sm">
+              Save Drive
+            </button>
+          </div>
+          <div class="flex items-center gap-2 mt-0.5 px-1">
+            <div id="driveStatus" class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0" title="Disconnected"></div>
+            <span id="statusText" class="text-[11px] text-slate-400 truncate">Drive Disconnected</span>
+          </div>
+        </div>
+
+        <!-- Search Filter -->
+        <div class="relative">
+          <input type="text" id="searchInput" placeholder="Search entries, tags..." oninput="filterEntries()" class="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition">
+        </div>
+
+        <!-- Index List -->
+        <div class="flex-1 min-h-0 flex flex-col">
+          <div class="flex items-center justify-between mb-1.5 flex-shrink-0">
+            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-extrabold">Lore Index</span>
+            <button onclick="showFullDocument()" class="text-[10px] text-emerald-400 hover:underline">Top of Archive</button>
+          </div>
+          <div id="indexList" class="text-slate-400 italic text-xs space-y-0.5 overflow-y-auto flex-1 custom-scrollbar">No file loaded...</div>
+        </div>
+
+        <!-- Add Entry Button -->
+        <button onclick="addNewEntry()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black rounded text-xs transition shadow-sm mt-2 flex-shrink-0">
+          + Add New Entry
+        </button>
+      </div>
+    </aside>
+
+    <!-- Content Workspace -->
+    <main class="flex-1 flex flex-col bg-slate-950 overflow-hidden h-full">
+      <!-- View Toggle Bar -->
+      <header class="bg-slate-900 border-b border-slate-800 px-4 md:px-6 py-2.5 flex items-center justify-between select-none flex-shrink-0 gap-2">
+        <div class="flex items-center gap-2">
+          <!-- Expand Sidebar Button (Visible only when collapsed) -->
+          <button onclick="toggleSidebar()" id="expandBtn" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition hidden shadow-sm flex-shrink-0" title="Expand Sidebar">
+            ▶
+          </button>
+          <div class="flex gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800">
+            <button id="readerTabBtn" onclick="switchView('reader')" class="px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm">View</button>
+            <button id="editorTabBtn" onclick="switchView('editor')" class="px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition">Editor</button>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <label class="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-xs font-medium text-slate-200 cursor-pointer transition flex items-center gap-1.5">
+            <span>Open Local</span>
+            <input type="file" id="localFileInput" accept=".txt,.md" onchange="handleLocalFileLoad(event)" class="hidden">
+          </label>
+          <button onclick="copyRawText()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-xs font-medium text-slate-200 transition hidden sm:block">Copy Raw</button>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+      <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0">
+        <!-- Reader View -->
+        <div id="readerView" class="max-w-4xl mx-auto space-y-6 pb-12">
+          <div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+            <p class="text-sm font-medium">No master lore file currently loaded into Lore Indexor.</p>
+            <p class="text-xs text-slate-600 mt-1">Connect Google Drive, fetch file, or open a local .txt file.</p>
+          </div>
+        </div>
+
+        <!-- Raw Text Editor View -->
+        <div id="editorView" class="hidden h-full max-w-4xl mx-auto flex flex-col pb-6">
+          <!-- Text Formatting Toolbar -->
+          <div class="bg-slate-900 border border-slate-800 border-b-0 rounded-t-xl p-2 flex flex-wrap gap-1.5 items-center">
+            <button onclick="insertFormatting('**', '**')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded font-mono" title="Bold">B</button>
+            <button onclick="insertFormatting('*', '*')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs italic rounded font-serif" title="Italic">I</button>
+            <button onclick="insertFormatting('~~', '~~')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs line-through rounded" title="Strikethrough">S</button>
+            <div class="h-4 w-[1px] bg-slate-700 mx-1"></div>
+            <button onclick="insertFormatting('\n* ', '')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded" title="Bullet List">• List</button>
+            <button onclick="insertFormatting('\n1. ', '')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded" title="Numbered List">1. Num</button>
+          </div>
+          <textarea id="rawTextArea" oninput="handleEditorInput()" class="w-full flex-1 bg-slate-900 border border-slate-800 rounded-b-xl p-4 font-mono text-xs text-slate-200 focus:outline-none focus:border-blue-500 resize-none leading-relaxed custom-scrollbar min-h-[550px]" placeholder="Raw file content will appear here..."></textarea>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Custom In-App Modal Dialog -->
+  <div id="customModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+      <h3 id="modalTitle" class="text-sm font-bold text-emerald-400 uppercase tracking-widest">Add Tag</h3>
+      <div id="modalBody" class="space-y-3">
+        <!-- Dynamic Inputs injected here -->
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded transition">Cancel</button>
+        <button id="modalSubmitBtn" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded transition shadow-sm">Save Tag</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Script Logic -->
+  <script>
+    const CLIENT_ID = typeof CONFIG !== 'undefined' ? CONFIG.CLIENT_ID : '';
+    const DRIVE_FILE_ID = typeof CONFIG !== 'undefined' ? CONFIG.DRIVE_FILE_ID : '';
+
+    let tokenClient;
+    let accessToken = localStorage.getItem('google_access_token') || null;
+    let fileContent = "";
+    let parsedEntries = [];
+    let allExistingTags = new Set();
+    let allExistingCategories = new Set(['PETA TAGS', 'META TAGS', 'LORE TAGS', 'RELATIONS TAGS']);
+    let sidebarCollapsed = false;
+    let isUserTyping = false;
+    let currentView = 'reader';
+
+    const categoryColorPalette = [
+      { bg: 'bg-purple-950', text: 'text-purple-300', border: 'border-purple-800', hover: 'hover:bg-purple-900' },
+      { bg: 'bg-indigo-950', text: 'text-indigo-300', border: 'border-indigo-800', hover: 'hover:bg-indigo-900' },
+      { bg: 'bg-amber-950', text: 'text-amber-300', border: 'border-amber-800', hover: 'hover:bg-amber-900' },
+      { bg: 'bg-pink-950', text: 'text-pink-300', border: 'border-pink-800', hover: 'hover:bg-pink-900' },
+      { bg: 'bg-teal-950', text: 'text-teal-300', border: 'border-teal-800', hover: 'hover:bg-teal-900' },
+      { bg: 'bg-cyan-950', text: 'text-cyan-300', border: 'border-cyan-800', hover: 'hover:bg-cyan-900' },
+      { bg: 'bg-rose-950', text: 'text-rose-300', border: 'border-rose-800', hover: 'hover:bg-rose-900' },
+      { bg: 'bg-orange-950', text: 'text-orange-300', border: 'border-orange-800', hover: 'hover:bg-orange-900' }
+    ];
+    const categoryColorMap = {};
+
+    function getCategoryStyle(categoryKey) {
+      const cleanKey = categoryKey.toUpperCase().trim();
+      if (!categoryColorMap[cleanKey]) {
+        const index = Object.keys(categoryColorMap).length % categoryColorPalette.length;
+        categoryColorMap[cleanKey] = categoryColorPalette[index];
+      }
+      return categoryColorMap[cleanKey];
+    }
+
+    window.onload = function () {
+      initGoogleDriveSDK();
+    };
+
+    function initGoogleDriveSDK() {
+      if (window.google) {
+        try {
+          tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/drive',
+            callback: (response) => {
+              if (response.error !== undefined) {
+                console.error(response);
+                return;
+              }
+              accessToken = response.access_token;
+              localStorage.setItem('google_access_token', accessToken);
+              updateAuthUI(true);
+              fetchDriveFile();
+            },
+          });
+
+          if (accessToken) {
+            updateAuthUI(true);
+            fetchDriveFile();
+          } else {
+            tokenClient.requestAccessToken({ prompt: '' });
+          }
+        } catch (err) {
+          console.error("SDK Init Error", err);
+        }
+      }
+    }
+
+    function updateAuthUI(isConnected) {
+      const statusDot = document.getElementById('driveStatus');
+      const authBtn = document.getElementById('authBtn');
+      const statusText = document.getElementById('statusText');
+
+      if (isConnected) {
+        statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 flex-shrink-0';
+        statusDot.title = 'Drive Connected';
+        authBtn.innerText = '✓ Drive Connected';
+        authBtn.className = 'w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5';
+        statusText.innerText = 'Drive Connected';
+      } else {
+        statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0';
+        statusDot.title = 'Disconnected';
+        authBtn.innerText = 'Connect Google Drive';
+        authBtn.className = 'w-full py-2 px-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5';
+        statusText.innerText = 'Drive Disconnected';
+      }
+    }
+
+    function handleAuthClick() {
+      if (accessToken) {
+        fetchDriveFile();
+        return;
+      }
+      if (tokenClient) {
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
+      } else {
+        alert('Google SDK not fully loaded yet. Please refresh.');
+      }
+    }
+
+    async function fetchDriveFile() {
+      if (!accessToken) {
+        handleAuthClick();
+        return;
+      }
+      try {
+        let res = await fetch(`https://www.googleapis.com/drive/v3/files/${DRIVE_FILE_ID}?alt=media`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (res.status === 401) {
+          localStorage.removeItem('google_access_token');
+          accessToken = null;
+          updateAuthUI(false);
+          tokenClient.requestAccessToken({ prompt: '' });
+          return;
+        }
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        fileContent = await res.text();
+        document.getElementById('rawTextArea').value = fileContent;
+        parseLoreContent(fileContent);
+        
+        if (!sidebarCollapsed) {
+          toggleSidebar();
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Fetch Error: Could not fetch file content. Click Fetch Drive to retry.');
+      }
+    }
+
+    async function saveDriveFile() {
+      if (!accessToken) {
+        alert('Please connect Google Drive first.');
+        return;
+      }
+      const updatedContent = document.getElementById('rawTextArea').value;
+      try {
+        let res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${DRIVE_FILE_ID}?uploadType=media`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'text/plain'
+          },
+          body: updatedContent
+        });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        fileContent = updatedContent;
+        alert('File saved successfully to Google Drive!');
+      } catch (err) {
+        console.error(err);
+        alert('Save Error: Could not save file content.');
+      }
+    }
+
+    function handleLocalFileLoad(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        fileContent = e.target.result;
+        document.getElementById('rawTextArea').value = fileContent;
+        parseLoreContent(fileContent);
+        if (!sidebarCollapsed) toggleSidebar();
+      };
+      reader.readAsText(file);
+    }
+
+    function handleEditorInput() {
+      isUserTyping = true;
+      fileContent = document.getElementById('rawTextArea').value;
+      parseLoreContent(fileContent, false);
+      isUserTyping = false;
+    }
+
+    function toggleSidebar() {
+      sidebarCollapsed = !sidebarCollapsed;
+      const sidebar = document.getElementById('sidebar');
+      const expandBtn = document.getElementById('expandBtn');
+      
+      if (sidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        expandBtn.classList.remove('hidden');
+      } else {
+        sidebar.classList.remove('collapsed');
+        expandBtn.classList.add('hidden');
+      }
+    }
+
+    function parseLoreContent(text, reRenderReader = true) {
+      const rawBlocks = text.split(/(?=\n=+\s*\nENTRY:|\nENTRY:|\n#{1,3}\s*ENTRY:|^ENTRY:)/gi);
+      
+      parsedEntries = [];
+      allExistingTags.clear();
+      allExistingCategories.clear();
+      allExistingCategories.add('PETA TAGS');
+      allExistingCategories.add('META TAGS');
+      allExistingCategories.add('LORE TAGS');
+      allExistingCategories.add('RELATIONS TAGS');
+
+      rawBlocks.forEach((block, idx) => {
+        const trimmed = block.trim();
+        if (!trimmed || trimmed.replace(/^[=-]+|[=-]+$/g, '').trim() === '') return;
+
+        let title = '';
+        if (idx === 0 || trimmed.startsWith('[INDEX]')) {
+          title = 'INDEX';
+        } else if (trimmed.toUpperCase().includes('MASTER TAG LIST') || trimmed.toUpperCase().includes('TAG LIST')) {
+          title = 'THE MASTER TAG LIST';
+        } else {
+          const lines = trimmed.split('\n');
+          let titleLine = lines.find(l => l.toUpperCase().includes('ENTRY:') || l.startsWith('#')) || lines[0];
+          title = titleLine.replace(/^#+\s*/, '').replace(/^ENTRY:\s*/i, '').replace(/^[=-]+|[=-]+$/g, '').trim();
+          if (!title) title = `Lore Entry ${idx + 1}`;
+        }
+
+        const lines = trimmed.split('\n');
+        let titleLine = lines.find(l => l.toUpperCase().includes('ENTRY:') || l.startsWith('#')) || lines[0];
+        
+        let lastEdited = new Date().toISOString().split('T')[0];
+        const dateLine = lines.find(l => l.includes('Last Edited:'));
+        if (dateLine) {
+          const dateMatch = dateLine.match(/Last Edited:\s*([0-9-]+)/);
+          if (dateMatch) lastEdited = dateMatch[1];
+        }
+
+        let dynamicTags = {};
+        const tagLineRegexOutside = /^\[\s*([A-Z\s_-]+)\s*\]\s*:\s*(.+)$/i;
+        const tagLineRegexInside = /^\[\s*([A-Z\s_-]+)\s*:\s*(.+)\s*\]$/i;
+
+        lines.forEach(l => {
+          const lt = l.trim();
+          let match = lt.match(tagLineRegexOutside) || lt.match(tagLineRegexInside);
+          if (match) {
+            const cat = match[1].trim();
+            if (!cat.toUpperCase().includes('LAST EDITED')) {
+              allExistingCategories.add(cat.toUpperCase());
+              const vals = match[2].split('|').map(s => s.trim()).filter(Boolean);
+              dynamicTags[cat] = vals;
+              vals.forEach(v => allExistingTags.add(v));
+            }
+          }
+        });
+
+        const bodyLines = lines.filter(l => {
+          if (l.includes('====') || l.includes('----') || l === titleLine || l.includes('Last Edited:')) return false;
+          const lt = l.trim();
+          let match = lt.match(tagLineRegexOutside) || lt.match(tagLineRegexInside);
+          if (match && !match[1].toUpperCase().includes('LAST EDITED')) return false;
+          return true;
+        });
+        const body = bodyLines.join('\n').trim();
+        const tags = (block.match(/#[a-zA-Z0-9_-]+/g) || []).map(t => t.substring(1));
+
+        parsedEntries.push({ id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block });
+      });
+
+      renderSidebarList(parsedEntries);
+      if (reRenderReader && !isUserTyping) {
+        showFullDocument();
+      }
+    }
+
+    function renderProcessedBody(bodyText) {
+      let formatted = escapeHtml(bodyText);
+      const sortedEntries = [...parsedEntries].sort((a, b) => b.title.length - a.title.length);
+      
+      sortedEntries.forEach(entry => {
+        if (entry.title && entry.title !== 'INDEX') {
+          const escapedTitle = entry.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          const regex = new RegExp(`\\b(${escapedTitle})\\b`, 'g');
+          formatted = formatted.replace(regex, `<span class="lore-link" onclick="scrollToEntryTitle('${escapeQuotes(entry.title)}')">$1</span>`);
+        }
+      });
+      return formatted;
+    }
+
+    function scrollToMasterTagList() {
+      const match = parsedEntries.find(e => e.title.toUpperCase().includes('MASTER TAG LIST') || e.title.toUpperCase().includes('TAG LIST'));
+      if (match) {
+        scrollToEntry(match.id);
+      } else {
+        scrollToEntry(0);
+      }
+    }
+
+    function openModal(title, bodyHtml, onSubmit) {
+      document.getElementById('modalTitle').innerText = title;
+      document.getElementById('modalBody').innerHTML = bodyHtml;
+      const submitBtn = document.getElementById('modalSubmitBtn');
+      submitBtn.onclick = () => {
+        onSubmit();
+        closeModal();
+      };
+      document.getElementById('customModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('customModal').classList.add('hidden');
+    }
+
+    function promptAddTag(entryId, defaultCategory) {
+      const entry = parsedEntries.find(e => e.id === entryId);
+      if (!entry) return;
+
+      const isPetaOnly = defaultCategory === 'PETA TAGS';
+      const tagOptionsHtml = Array.from(allExistingTags).sort().map(t => `<option value="${escapeHtml(t)}">`).join('');
+      const catOptionsHtml = Array.from(allExistingCategories).sort().map(c => `<option value="${escapeHtml(c)}">`).join('');
+
+      const bodyHtml = `
+        <div class="space-y-2">
+          <label class="text-[11px] text-slate-400 font-medium">Tag Value (Type new or pick from existing):</label>
+          <input type="text" id="modalTagVal" list="existingTagsList" placeholder="Enter or select tag..." class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+          <datalist id="existingTagsList">${tagOptionsHtml}</datalist>
+        </div>
+        ${!isPetaOnly ? `
+        <div class="space-y-2 pt-1">
+          <label class="text-[11px] text-slate-400 font-medium">Main Tag Category:</label>
+          <input type="text" id="modalCatVal" list="existingCatsList" placeholder="META TAGS" value="META TAGS" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+          <datalist id="existingCatsList">${catOptionsHtml}</datalist>
+        </div>` : ''}
+      `;
+
+      openModal(isPetaOnly ? 'Add PETA Tag' : 'Add New Tag', bodyHtml, () => {
+        const valInput = document.getElementById('modalTagVal').value.trim();
+        if (!valInput) return;
+        const category = isPetaOnly ? 'PETA TAGS' : document.getElementById('modalCatVal').value.trim().toUpperCase();
+        if (!category) return;
+
+        let rawBlock = entry.raw;
+        const tagPattern = new RegExp(`\\[\\s*${category}\\s*\\]\\s*:\\s*(.+)`, 'i');
+        const tagPatternInside = new RegExp(`\\[\\s*${category}\\s*:\\s*([^\\]]+)\\]`, 'i');
+
+        if (tagPattern.test(rawBlock)) {
+          rawBlock = rawBlock.replace(tagPattern, (match, p1) => `[${category}]: ${p1.trim()} | ${valInput}`);
+        } else if (tagPatternInside.test(rawBlock)) {
+          rawBlock = rawBlock.replace(tagPatternInside, (match, p1) => `[${category}: ${p1.trim()} | ${valInput}]`);
+        } else {
+          rawBlock = rawBlock.replace(/(ENTRY:[^\n]+\n)/i, `$1[${category}]: ${valInput}\n`);
+        }
+
+        const masterListEntry = parsedEntries.find(e => e.title.toUpperCase().includes('MASTER TAG LIST') || e.title.toUpperCase().includes('TAG LIST'));
+        if (masterListEntry) {
+          let masterRaw = masterListEntry.raw;
+          const masterPattern = new RegExp(`\\[\\s*${category}\\s*\\]\\s*:\\s*(.+)`, 'i');
+          if (masterPattern.test(masterRaw)) {
+            masterRaw = masterRaw.replace(masterPattern, (match, p1) => `[${category}]: ${p1.trim()} | ${valInput}`);
+            fileContent = fileContent.replace(masterListEntry.raw, masterRaw);
+          }
+        }
+
+        const today = new Date().toISOString().split('T')[0];
+        if (rawBlock.includes('Last Edited:')) {
+          rawBlock = rawBlock.replace(/Last Edited:\s*[0-9-]+/, `Last Edited: ${today}`);
+        } else {
+          rawBlock = rawBlock.replace(/(ENTRY:[^\n]+\n)/i, `$1[Last Edited: ${today}]\n`);
+        }
+
+        fileContent = fileContent.replace(entry.raw, rawBlock);
+        document.getElementById('rawTextArea').value = fileContent;
+        parseLoreContent(fileContent);
+      });
+    }
+
+    function removeTag(entryId, category, tagVal) {
+      const entry = parsedEntries.find(e => e.id === entryId);
+      if (!entry) return;
+
+      let rawBlock = entry.raw;
+      const tagPattern = new RegExp(`\\[\\s*${category}\\s*\\]\\s*:\\s*(.+)`, 'i');
+      const tagPatternInside = new RegExp(`\\[\\s*${category}\\s*:\\s*([^\\]]+)\\]`, 'i');
+
+      if (tagPattern.test(rawBlock)) {
+        rawBlock = rawBlock.replace(tagPattern, (match, p1) => {
+          const filtered = p1.split('|').map(s => s.trim()).filter(s => s !== tagVal);
+          return filtered.length ? `[${category}]: ${filtered.join(' | ')}` : '';
+        });
+      } else if (tagPatternInside.test(rawBlock)) {
+        rawBlock = rawBlock.replace(tagPatternInside, (match, p1) => {
+          const filtered = p1.split('|').map(s => s.trim()).filter(s => s !== tagVal);
+          return filtered.length ? `[${category}: ${filtered.join(' | ')}]` : '';
+        });
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      if (rawBlock.includes('Last Edited:')) {
+        rawBlock = rawBlock.replace(/Last Edited:\s*[0-9-]+/, `Last Edited: ${today}`);
+      }
+
+      fileContent = fileContent.replace(entry.raw, rawBlock);
+      document.getElementById('rawTextArea').value = fileContent;
+      parseLoreContent(fileContent);
+    }
+
+    function renderEntryCard(entry) {
+      const isIndex = entry.title === 'INDEX';
+      let petaHtml = '';
+      let otherTagsHtml = '';
+
+      for (const [cat, vals] of Object.entries(entry.dynamicTags)) {
+        const style = getCategoryStyle(cat);
+        const isPeta = cat.toUpperCase().includes('PETA');
+        
+        vals.forEach(val => {
+          const bubbleMarkup = `
+            <span class="relative group/tag inline-flex items-center gap-1 px-2.5 py-0.5 ${style.bg} ${style.text} text-[10px] font-mono rounded-full border ${style.border} transition">
+              <span onclick="scrollToMasterTagList()" class="cursor-pointer hover:underline" title="${cat}">${escapeHtml(val)}</span>
+              <!-- Editor View Remove (X) Button -->
+              <button onclick="removeTag(${entry.id}, '${cat}', '${escapeQuotes(val)}')" class="${currentView === 'editor' ? '' : 'hidden'} editor-remove-btn text-rose-400 hover:text-rose-200 font-bold ml-0.5 text-[9px]" title="Remove tag">×</button>
+            </span>
+          `;
+          if (isPeta) {
+            petaHtml += bubbleMarkup;
+          } else {
+            otherTagsHtml += bubbleMarkup;
+          }
+        });
+      }
+
+      return `
+        <article id="entry-${entry.id}" class="bg-slate-900/80 border border-slate-800 rounded-xl p-6 shadow-md space-y-4 hover:border-emerald-500/40 transition">
+          <!-- PETA Tags & Dedicated + Peta Button Above Entry Name -->
+          ${!isIndex ? `
+          <div class="flex flex-wrap gap-1.5 items-center">
+            ${petaHtml}
+            <button onclick="promptAddTag(${entry.id}, 'PETA TAGS')" class="${currentView === 'editor' ? '' : 'hidden'} editor-add-btn px-2 py-0.5 bg-slate-800 hover:bg-purple-600 hover:text-slate-950 text-slate-400 text-[10px] font-bold rounded-full border border-slate-700 transition" title="Add PETA Tag">+ Peta</button>
+          </div>` : ''}
+
+          <!-- Entry Name & Date on the same line -->
+          <div class="flex flex-col border-b border-slate-800 pb-3 gap-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-lg font-bold text-slate-100 tracking-wide">${escapeHtml(entry.title)}</h2>
+              <span class="text-xs font-mono text-slate-400 font-normal flex-shrink-0">${escapeHtml(entry.lastEdited)}</span>
+            </div>
+            
+            <!-- Other Tags & Dedicated + Tag Button Below Entry Name -->
+            ${!isIndex ? `
+            <div class="flex flex-wrap gap-1.5 items-center">
+              ${otherTagsHtml}
+              ${entry.tags.map(t => `
+                <span class="relative group/tag inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-mono rounded-full border border-slate-700 transition">
+                  <span onclick="filterByTag('${t}')" class="cursor-pointer hover:underline">#${escapeHtml(t)}</span>
+                </span>
+              `).join('')}
+              <button onclick="promptAddTag(${entry.id}, 'META TAGS')" class="${currentView === 'editor' ? '' : 'hidden'} editor-add-btn px-2 py-0.5 bg-slate-800 hover:bg-emerald-600 hover:text-slate-950 text-slate-400 text-[10px] font-bold rounded-full border border-slate-700 transition" title="Add Tag">+ Tag</button>
+            </div>` : ''}
+          </div>
+          
+          <div class="text-xs text-slate-300 font-sans leading-relaxed whitespace-pre-wrap">${renderProcessedBody(entry.body)}</div>
+        </article>
+      `;
+    }
+
+    function showFullDocument() {
+      const container = document.getElementById('readerView');
+      if (parsedEntries.length === 0) {
+        container.innerHTML = `
+          <div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
+            <p class="text-sm font-medium">No valid entries found. Check your raw text format.</p>
+          </div>`;
+        return;
+      }
+      container.innerHTML = parsedEntries.map(e => renderEntryCard(e)).join('');
+      container.scrollTop = 0;
+    }
+
+    function scrollToEntry(id) {
+      const el = document.getElementById('entry-' + id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el.classList.add('ring-2', 'ring-emerald-500');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-500'), 2000);
+      }
+    }
+
+    function scrollToEntryTitle(title) {
+      const match = parsedEntries.find(e => e.title.toLowerCase() === title.toLowerCase());
+      if (match) {
+        scrollToEntry(match.id);
+      }
+    }
+
+    function renderSidebarList(entries) {
+      const indexList = document.getElementById('indexList');
+      indexList.innerHTML = entries.map(e => `
+        <div onclick="scrollToEntry(${e.id})" class="text-slate-300 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-medium transition" title="${escapeHtml(e.title)}">
+          • ${escapeHtml(e.title)}
+        </div>
+      `).join('');
+    }
+
+    function filterEntries() {
+      const query = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = parsedEntries.filter(e => 
+        e.title.toLowerCase().includes(query) || 
+        e.body.toLowerCase().includes(query) || 
+        e.tags.some(t => t.toLowerCase().includes(query)) ||
+        Object.values(e.dynamicTags).some(arr => arr.some(v => v.toLowerCase().includes(query)))
+      );
+      
+      const container = document.getElementById('readerView');
+      container.innerHTML = filtered.map(e => renderEntryCard(e)).join('');
+      renderSidebarList(filtered);
+    }
+
+    function filterByTag(tag) {
+      document.getElementById('searchInput').value = tag;
+      filterEntries();
+    }
+
+    function switchView(view) {
+      currentView = view;
+      const readerTab = document.getElementById('readerTabBtn');
+      const editorTab = document.getElementById('editorTabBtn');
+      const readerView = document.getElementById('readerView');
+      const editorView = document.getElementById('editorView');
+
+      if (view === 'reader') {
+        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm';
+        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+        readerView.classList.remove('hidden');
+        editorView.classList.add('hidden');
+        parseLoreContent(document.getElementById('rawTextArea').value);
+      } else {
+        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition';
+        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+        editorView.classList.remove('hidden');
+        readerView.classList.add('hidden');
+        parseLoreContent(document.getElementById('rawTextArea').value);
+      }
+    }
+
+    function addNewEntry() {
+      const today = new Date().toISOString().split('T')[0];
+      const textArea = document.getElementById('rawTextArea');
+      
+      const newEntryBlock = `\n\n====================================================\nENTRY: New Lore Entry\n[Last Edited: ${today}]\n[PETA TAGS]: Places\n====================================================\nWrite your entry notes here...`;
+      textArea.value += newEntryBlock;
+      
+      handleEditorInput();
+      switchView('reader');
+
+      setTimeout(() => {
+        if (parsedEntries.length > 0) {
+          const newestEntry = parsedEntries[parsedEntries.length - 1];
+          scrollToEntry(newestEntry.id);
+        }
+      }, 100);
+    }
+
+    function insertFormatting(wrapperStart, wrapperEnd) {
+      const textarea = document.getElementById('rawTextArea');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const selectedText = textarea.value.substring(start, end);
+      const replacement = wrapperStart + selectedText + wrapperEnd;
+      
+      textarea.value = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
+      textarea.focus();
+      textarea.setSelectionRange(start + wrapperStart.length, end + wrapperStart.length);
+      handleEditorInput();
+    }
+
+    function copyRawText() {
+      const text = document.getElementById('rawTextArea').value;
+      navigator.clipboard.writeText(text);
+      alert('Raw text copied to clipboard!');
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function escapeQuotes(str) {
+      return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>
