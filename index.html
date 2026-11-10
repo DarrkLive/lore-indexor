@@ -36,7 +36,7 @@
     .lore-link:hover { color: #93c5fd; }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 h-screen w-screen flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 overflow-hidden relative">
+<body class="bg-slate-950 text-slate-100 h-[100dvh] w-screen flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 overflow-hidden relative">
 
   <!-- Main App Layout -->
   <div class="flex flex-1 h-full w-full overflow-hidden relative">
@@ -201,6 +201,15 @@
       initGoogleDriveSDK();
     };
 
+    window.addEventListener('pageshow', function (event) {
+      if (event.persisted) {
+        window.dispatchEvent(new Event('resize'));
+        if (accessToken && parsedEntries.length === 0) {
+          fetchDriveFile();
+        }
+      }
+    });
+
     function initGoogleDriveSDK() {
       if (window.google) {
         try {
@@ -349,6 +358,41 @@
         sidebar.classList.remove('collapsed');
         expandBtn.classList.add('hidden');
       }
+    }
+
+    function switchView(viewName) {
+      currentView = viewName;
+      const readerTab = document.getElementById('readerTabBtn');
+      const editorTab = document.getElementById('editorTabBtn');
+      const readerView = document.getElementById('readerView');
+      const editorView = document.getElementById('editorView');
+
+      if (viewName === 'reader') {
+        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm';
+        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+        readerView.classList.remove('hidden');
+        editorView.classList.add('hidden');
+        showFullDocument();
+      } else {
+        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm';
+        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+        editorView.classList.remove('hidden');
+        readerView.classList.add('hidden');
+        document.getElementById('rawTextArea').value = fileContent;
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function escapeQuotes(str) {
+      return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
     function parseLoreContent(text, reRenderReader = true) {
@@ -657,14 +701,15 @@
       const query = document.getElementById('searchInput').value.toLowerCase();
       const filtered = parsedEntries.filter(e => 
         e.title.toLowerCase().includes(query) || 
-        e.body.toLowerCase().includes(query) || 
-        e.tags.some(t => t.toLowerCase().includes(query)) ||
-        Object.values(e.dynamicTags).some(arr => arr.some(v => v.toLowerCase().includes(query)))
+        e.body.toLowerCase().includes(query) ||
+        Object.values(e.dynamicTags).flat().some(v => v.toLowerCase().includes(query))
       );
-      
       const container = document.getElementById('readerView');
-      container.innerHTML = filtered.map(e => renderEntryCard(e)).join('');
-      renderSidebarList(filtered);
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center text-slate-500 py-24">No matching lore entries found.</div>`;
+      } else {
+        container.innerHTML = filtered.map(e => renderEntryCard(e)).join('');
+      }
     }
 
     function filterByTag(tag) {
@@ -672,71 +717,32 @@
       filterEntries();
     }
 
-    function switchView(view) {
-      currentView = view;
-      const readerTab = document.getElementById('readerTabBtn');
-      const editorTab = document.getElementById('editorTabBtn');
-      const readerView = document.getElementById('readerView');
-      const editorView = document.getElementById('editorView');
-
-      if (view === 'reader') {
-        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm';
-        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
-        readerView.classList.remove('hidden');
-        editorView.classList.add('hidden');
-        parseLoreContent(document.getElementById('rawTextArea').value);
-      } else {
-        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition';
-        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
-        editorView.classList.remove('hidden');
-        readerView.classList.add('hidden');
-        parseLoreContent(document.getElementById('rawTextArea').value);
-      }
-    }
-
     function addNewEntry() {
-      const today = new Date().toISOString().split('T')[0];
-      const textArea = document.getElementById('rawTextArea');
-      
-      const newEntryBlock = `\n\n====================================================\nENTRY: New Lore Entry\n[Last Edited: ${today}]\n[PETA TAGS]: Places\n====================================================\nWrite your entry notes here...`;
-      textArea.value += newEntryBlock;
-      
-      handleEditorInput();
-      switchView('reader');
-
-      setTimeout(() => {
-        if (parsedEntries.length > 0) {
-          const newestEntry = parsedEntries[parsedEntries.length - 1];
-          scrollToEntry(newestEntry.id);
-        }
-      }, 100);
-    }
-
-    function insertFormatting(wrapperStart, wrapperEnd) {
-      const textarea = document.getElementById('rawTextArea');
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selectedText = textarea.value.substring(start, end);
-      const replacement = wrapperStart + selectedText + wrapperEnd;
-      
-      textarea.value = textarea.value.substring(0, start) + replacement + textarea.value.substring(end);
-      textarea.focus();
-      textarea.setSelectionRange(start + wrapperStart.length, end + wrapperStart.length);
-      handleEditorInput();
+      const newEntryText = `\nENTRY: New Lore Entry\n[Last Edited: ${new Date().toISOString().split('T')[0]}]\n[META TAGS]: General\n\nWrite your entry content here...\n`;
+      fileContent += newEntryText;
+      document.getElementById('rawTextArea').value = fileContent;
+      parseLoreContent(fileContent);
+      scrollToEntry(parsedEntries[parsedEntries.length - 1].id);
     }
 
     function copyRawText() {
-      const text = document.getElementById('rawTextArea').value;
-      navigator.clipboard.writeText(text);
-      alert('Raw text copied to clipboard!');
+      const rawTextArea = document.getElementById('rawTextArea');
+      rawTextArea.select();
+      navigator.clipboard.writeText(rawTextArea.value).then(() => {
+        alert('Raw text copied to clipboard!');
+      });
     }
 
-    function escapeHtml(str) {
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    function escapeQuotes(str) {
-      return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    function insertFormatting(startTag, endTag) {
+      const textarea = document.getElementById('rawTextArea');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const val = textarea.value;
+      textarea.value = val.substring(0, start) + startTag + val.substring(start, end) + endTag + val.substring(end);
+      textarea.selectionStart = start + startTag.length;
+      textarea.selectionEnd = end + startTag.length;
+      textarea.focus();
+      handleEditorInput();
     }
   </script>
 </body>
