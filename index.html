@@ -389,6 +389,7 @@
       txtTab.className = viewName === 'txt' ? 'px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm' : 'px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
 
       if (viewName === 'txt') {
+        serializeAndSync();
         readerView.classList.add('hidden');
         txtView.classList.remove('hidden');
         document.getElementById('rawTextArea').value = fileContent;
@@ -421,7 +422,7 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // Non-destructive parser with date-sorted index building and clean subtag mapping
+    // Strict non-destructive parser ignoring bracketed descriptions
     function parseLoreContent(text, updateTextArea = true) {
       const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
@@ -439,7 +440,7 @@
         masterIndexEntry = { id: 'index', title: 'THE MASTER LORE INDEX', body: parts[0].trim(), lastEdited: 'Archive' };
       }
 
-      // 2. Capture Master Tag List and map subtags per category (ignoring descriptions in brackets)
+      // 2. Capture Master Tag List and map subtags cleanly (ignoring descriptions containing brackets like [...])
       const tagPart = parts.find(p => p.toUpperCase().includes('MASTER TAG LIST'));
       if (tagPart) {
         masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: tagPart.replace(/THE MASTER TAG LIST/i, '').trim(), lastEdited: 'Archive' };
@@ -457,10 +458,12 @@
               allExistingCategories.add(currentCat);
               if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
             }
-          } else if (lt && !lt.startsWith('[')) {
-            // Valid subtag line without brackets
+          } else if (lt && !lt.startsWith('[') && !lt.includes('[')) {
+            // Valid subtag line without any brackets or descriptions
             if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
-            categoryToSubtagsMap[currentCat].push(lt);
+            if (!categoryToSubtagsMap[currentCat].includes(lt)) {
+              categoryToSubtagsMap[currentCat].push(lt);
+            }
             allExistingTags.add(lt);
           }
         });
@@ -531,6 +534,24 @@
     }
 
     function serializeAndSync() {
+      // Automatically ensure newly created tags are appended to the Master Tag List card body text
+      if (masterTagListEntry) {
+        let tagBody = masterTagListEntry.body;
+        for (const [cat, subtags] of Object.entries(categoryToSubtagsMap)) {
+          const catHeader = `[${cat}]`;
+          if (tagBody.includes(catHeader)) {
+            // Find existing section and ensure subtags are present
+            subtags.forEach(sub => {
+              if (!tagBody.includes(sub)) {
+                // Append under category header if missing
+                tagBody = tagBody.replace(catHeader, `${catHeader}\n${sub}`);
+              }
+            });
+          }
+        }
+        masterTagListEntry.body = tagBody.trim();
+      }
+
       const indexBody = masterIndexEntry ? masterIndexEntry.body : '[INDEX]';
       const tagBody = masterTagListEntry ? masterTagListEntry.body : '';
 
@@ -568,7 +589,10 @@
 
     function updateSpecialCardBody(type, newBody) {
       if (type === 'index' && masterIndexEntry) masterIndexEntry.body = newBody.trim();
-      else if (type === 'tags' && masterTagListEntry) masterTagListEntry.body = newBody.trim();
+      else if (type === 'tags' && masterTagListEntry) {
+        masterTagListEntry.body = newBody.trim();
+        parseLoreContent(fileContent, false); // Re-parse tags map on edit
+      }
       serializeAndSync();
     }
 
@@ -615,10 +639,8 @@
       let availableTags = [];
 
       if (!enteredCat) {
-        // If main tag category is blank, show all existing tags
         availableTags = Array.from(allExistingTags);
       } else {
-        // If category is specified, show only subtags belonging to that category
         const matchedKey = Object.keys(categoryToSubtagsMap).find(k => k.includes(enteredCat));
         if (matchedKey && categoryToSubtagsMap[matchedKey]) {
           availableTags = categoryToSubtagsMap[matchedKey];
@@ -659,14 +681,19 @@
 
         if (!entry.dynamicTags[category]) entry.dynamicTags[category] = [];
         if (!entry.dynamicTags[category].includes(valInput)) entry.dynamicTags[category].push(valInput);
+        
         allExistingTags.add(valInput);
+        if (!categoryToSubtagsMap[category]) categoryToSubtagsMap[category] = [];
+        if (!categoryToSubtagsMap[category].includes(valInput)) {
+          categoryToSubtagsMap[category].push(valInput);
+        }
+
         entry.lastEdited = new Date().toISOString().split('T')[0];
         
         serializeAndSync();
         showFullDocument();
       });
 
-      // Initialize dropdown options
       updateModalTagDropdown();
     }
 
@@ -688,7 +715,6 @@
       
       let cardBodyContent = card.body;
       if (isIndex) {
-        // Render Master Lore Index dynamically sorted by date
         const sortedTitles = parsedEntries.map(e => e.title);
         cardBodyContent = `[INDEX]\n` + sortedTitles.join('\n');
       }
@@ -701,7 +727,7 @@
               <span class="text-xs font-mono text-slate-400">${card.lastEdited}</span>
             </div>
           </div>
-          <div ${isEditable && !isIndex ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(cardBodyContent)}</div>
+          <div ${isEditable ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(cardBodyContent)}</div>
         </article>
       `;
     }
@@ -780,7 +806,6 @@
         <div onclick="scrollToCard('index')" class="text-emerald-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER LORE INDEX</div>
         <div onclick="scrollToCard('tags')" class="text-amber-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER TAG LIST</div>
       `;
-      // Sidebar list sorted by date (newest first) as well
       html += entries.map(e => `
         <div onclick="scrollToEntry(${e.id})" class="text-slate-300 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-medium transition" title="${escapeHtml(e.title)}">
           • ${escapeHtml(e.title)}
