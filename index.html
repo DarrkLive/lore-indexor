@@ -394,8 +394,9 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // Precise Parser: Splits file directly by ENTRY: headers so every card captures title, tags, and body correctly
+    // Bulletproof Parser: Handles any variation in divider spacing between entries
     function parseLoreContent(text) {
+      // Split strictly by 'ENTRY:' occurrence in the text
       const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
       parsedEntries = [];
@@ -439,7 +440,7 @@
           }
         });
 
-        // Everything that is not a header, tag line, or divider is part of the body
+        // Filter out headers, tags, dividers, and dates to capture the true entry body text
         const bodyLines = lines.filter(l => {
           const lt = l.trim();
           if (lt.includes('====') || lt.includes('----') || lt.toUpperCase().startsWith('ENTRY:') || lt.includes('Last Edited:')) return false;
@@ -447,6 +448,7 @@
           if (match && !match[1].toUpperCase().includes('LAST EDITED')) return false;
           return true;
         });
+        
         const body = bodyLines.join('\n').trim();
         const tags = (block.match(/#[a-zA-Z0-9_-]+/g) || []).map(t => t.substring(1));
 
