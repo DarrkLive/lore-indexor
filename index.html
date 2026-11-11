@@ -170,6 +170,7 @@
     let masterIndexEntry = null;
     let masterTagListEntry = null;
     let allExistingTags = new Set();
+    let categoryToSubtagsMap = {};
     let allExistingCategories = new Set(['PETA TAGS', 'META TAGS', 'LORE TAGS', 'RELATIONS TAGS']);
     let sidebarCollapsed = false;
     let currentView = 'reader';
@@ -420,42 +421,46 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // 100% Non-destructive parser that preserves raw text verbatim
+    // Non-destructive parser with date-sorted index building and clean subtag mapping
     function parseLoreContent(text, updateTextArea = true) {
       const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
       parsedEntries = [];
       allExistingTags.clear();
+      categoryToSubtagsMap = {};
       allExistingCategories.add('PETA TAGS');
       allExistingCategories.add('META TAGS');
       allExistingCategories.add('LORE TAGS');
       allExistingCategories.add('RELATIONS TAGS');
 
-      // 1. Capture exact Master Index section verbatim
+      // 1. Capture exact Master Index section
       const parts = text.split(/={10,}/);
       if (parts.length > 0) {
         masterIndexEntry = { id: 'index', title: 'THE MASTER LORE INDEX', body: parts[0].trim(), lastEdited: 'Archive' };
       }
 
-      // 2. Capture exact Master Tag List section verbatim
+      // 2. Capture Master Tag List and map subtags per category (ignoring descriptions in brackets)
       const tagPart = parts.find(p => p.toUpperCase().includes('MASTER TAG LIST'));
       if (tagPart) {
         masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: tagPart.replace(/THE MASTER TAG LIST/i, '').trim(), lastEdited: 'Archive' };
         
-        // Extract valid subtags (non-bracketed lines under bracketed category headers containing TAGS)
-        let inValidCategory = false;
+        let currentCat = 'META TAGS';
+        categoryToSubtagsMap[currentCat] = [];
         const tagLines = tagPart.split('\n');
+        
         tagLines.forEach(l => {
           const lt = l.trim();
           if (lt.startsWith('[') && lt.endsWith(']')) {
             const inner = lt.slice(1, -1).trim();
             if (inner.toUpperCase().includes('TAGS')) {
-              inValidCategory = true;
-              allExistingCategories.add(inner.toUpperCase());
-            } else {
-              inValidCategory = false; // Definition brackets without 'TAGS' are ignored as tags
+              currentCat = inner.toUpperCase();
+              allExistingCategories.add(currentCat);
+              if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
             }
-          } else if (lt && inValidCategory && !lt.startsWith('[')) {
+          } else if (lt && !lt.startsWith('[')) {
+            // Valid subtag line without brackets
+            if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
+            categoryToSubtagsMap[currentCat].push(lt);
             allExistingTags.add(lt);
           }
         });
@@ -512,6 +517,9 @@
         parsedEntries.push({ id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block });
       });
 
+      // Sort entries descending by Last Edited date (newest first)
+      parsedEntries.sort((a, b) => new Date(b.lastEdited) - new Date(a.lastEdited));
+
       if (updateTextArea) {
         const rawTextArea = document.getElementById('rawTextArea');
         if (rawTextArea) rawTextArea.value = text;
@@ -523,7 +531,6 @@
     }
 
     function serializeAndSync() {
-      // Only rebuilds entry cards; leaves Master Index and Master Tag List verbatim as user wrote them
       const indexBody = masterIndexEntry ? masterIndexEntry.body : '[INDEX]';
       const tagBody = masterTagListEntry ? masterTagListEntry.body : '';
 
@@ -599,43 +606,68 @@
       document.getElementById('customModal').classList.add('hidden');
     }
 
+    function updateModalTagDropdown() {
+      const catInput = document.getElementById('modalCatVal');
+      const datalist = document.getElementById('existingTagsList');
+      if (!datalist) return;
+
+      const enteredCat = catInput ? catInput.value.trim().toUpperCase() : '';
+      let availableTags = [];
+
+      if (!enteredCat) {
+        // If main tag category is blank, show all existing tags
+        availableTags = Array.from(allExistingTags);
+      } else {
+        // If category is specified, show only subtags belonging to that category
+        const matchedKey = Object.keys(categoryToSubtagsMap).find(k => k.includes(enteredCat));
+        if (matchedKey && categoryToSubtagsMap[matchedKey]) {
+          availableTags = categoryToSubtagsMap[matchedKey];
+        } else {
+          availableTags = [];
+        }
+      }
+
+      datalist.innerHTML = availableTags.sort().map(t => `<option value="${escapeHtml(t)}">`).join('');
+    }
+
     function promptAddTag(entryId, defaultCategory) {
       const entry = parsedEntries.find(e => e.id === entryId);
       if (!entry) return;
 
       const isPetaOnly = defaultCategory === 'PETA TAGS';
-      const tagOptionsHtml = Array.from(allExistingTags).sort().map(t => `<option value="${escapeHtml(t)}">`).join('');
       const catOptionsHtml = Array.from(allExistingCategories).sort().map(c => `<option value="${escapeHtml(c)}">`).join('');
 
       const bodyHtml = `
-        <div class="space-y-2">
-          <label class="text-[11px] text-slate-400 font-medium">Tag Value:</label>
-          <input type="text" id="modalTagVal" list="existingTagsList" placeholder="Enter or select tag..." class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
-          <datalist id="existingTagsList">${tagOptionsHtml}</datalist>
-        </div>
         ${!isPetaOnly ? `
-        <div class="space-y-2 pt-1">
-          <label class="text-[11px] text-slate-400 font-medium">Main Tag Category:</label>
-          <input type="text" id="modalCatVal" list="existingCatsList" placeholder="META TAGS" value="META TAGS" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+        <div class="space-y-2 pb-1">
+          <label class="text-[11px] text-slate-400 font-medium">Main Tag Category (leave blank for all tags):</label>
+          <input type="text" id="modalCatVal" list="existingCatsList" placeholder="e.g. META TAGS" oninput="updateModalTagDropdown()" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
           <datalist id="existingCatsList">${catOptionsHtml}</datalist>
         </div>` : ''}
+        <div class="space-y-2">
+          <label class="text-[11px] text-slate-400 font-medium">Tag Value (Subtag):</label>
+          <input type="text" id="modalTagVal" list="existingTagsList" placeholder="Select or type tag..." class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+          <datalist id="existingTagsList"></datalist>
+        </div>
       `;
 
       openModal(isPetaOnly ? 'Add PETA Tag' : 'Add New Tag', bodyHtml, () => {
         const valInput = document.getElementById('modalTagVal').value.trim();
         if (!valInput) return;
-        const category = isPetaOnly ? 'PETA TAGS' : document.getElementById('modalCatVal').value.trim().toUpperCase();
+        const category = isPetaOnly ? 'PETA TAGS' : (document.getElementById('modalCatVal') ? document.getElementById('modalCatVal').value.trim().toUpperCase() : 'META TAGS');
         if (!category) return;
 
         if (!entry.dynamicTags[category]) entry.dynamicTags[category] = [];
         if (!entry.dynamicTags[category].includes(valInput)) entry.dynamicTags[category].push(valInput);
         allExistingTags.add(valInput);
-        allExistingCategories.add(category);
         entry.lastEdited = new Date().toISOString().split('T')[0];
         
         serializeAndSync();
         showFullDocument();
       });
+
+      // Initialize dropdown options
+      updateModalTagDropdown();
     }
 
     function removeTag(entryId, category, tagVal) {
@@ -653,6 +685,14 @@
     function renderSpecialCard(card) {
       const isEditable = currentView === 'editor';
       const isIndex = card.id === 'index';
+      
+      let cardBodyContent = card.body;
+      if (isIndex) {
+        // Render Master Lore Index dynamically sorted by date
+        const sortedTitles = parsedEntries.map(e => e.title);
+        cardBodyContent = `[INDEX]\n` + sortedTitles.join('\n');
+      }
+
       return `
         <article id="card-${card.id}" class="bg-slate-900/85 border border-slate-800 rounded-xl p-6 shadow-md space-y-4 hover:border-emerald-500/40 transition">
           <div class="flex flex-col border-b border-slate-800 pb-3 gap-2.5">
@@ -661,7 +701,7 @@
               <span class="text-xs font-mono text-slate-400">${card.lastEdited}</span>
             </div>
           </div>
-          <div ${isEditable ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(card.body)}</div>
+          <div ${isEditable && !isIndex ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(cardBodyContent)}</div>
         </article>
       `;
     }
@@ -740,6 +780,7 @@
         <div onclick="scrollToCard('index')" class="text-emerald-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER LORE INDEX</div>
         <div onclick="scrollToCard('tags')" class="text-amber-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER TAG LIST</div>
       `;
+      // Sidebar list sorted by date (newest first) as well
       html += entries.map(e => `
         <div onclick="scrollToEntry(${e.id})" class="text-slate-300 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-medium transition" title="${escapeHtml(e.title)}">
           • ${escapeHtml(e.title)}
