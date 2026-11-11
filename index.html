@@ -106,13 +106,14 @@
       <!-- View Toggle Bar -->
       <header class="bg-slate-900 border-b border-slate-800 px-4 md:px-6 py-2.5 flex items-center justify-between select-none flex-shrink-0 gap-2">
         <div class="flex items-center gap-2">
-          <!-- Expand Sidebar Button -->
           <button onclick="toggleSidebar()" id="expandBtn" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition hidden shadow-sm flex-shrink-0" title="Expand Sidebar">
             ▶
           </button>
-          <div class="flex gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800">
-            <button id="readerTabBtn" onclick="switchView('reader')" class="px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm">View</button>
-            <button id="editorTabBtn" onclick="switchView('editor')" class="px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition">Editor</button>
+          <!-- 3-Page View Switcher -->
+          <div class="flex gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
+            <button id="readerTabBtn" onclick="switchView('reader')" class="px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm">View</button>
+            <button id="editorTabBtn" onclick="switchView('editor')" class="px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition">Editor</button>
+            <button id="txtTabBtn" onclick="switchView('txt')" class="px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition">Txt</button>
           </div>
         </div>
         <div class="flex gap-2">
@@ -125,17 +126,22 @@
       </header>
 
       <!-- View Containers -->
-      <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0">
-        <!-- Reader & Card Editor View Container -->
+      <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0 relative">
+        <!-- Reader View (Cards & Index / Tag List Cards) -->
         <div id="readerView" class="max-w-4xl mx-auto space-y-6 pb-12">
           <div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
             <p class="text-sm font-medium">No master lore file currently loaded into Lore Indexor.</p>
-            <p class="text-xs text-slate-600 mt-1">Connect Google Drive, fetch file, or open a local .txt file.</p>
           </div>
         </div>
 
-        <!-- Hidden Raw Text Storage for Drive Sync -->
-        <textarea id="rawTextArea" class="hidden"></textarea>
+        <!-- Raw Txt Direct Editor View (Page 3) -->
+        <div id="txtView" class="hidden h-full max-w-4xl mx-auto flex flex-col pb-6">
+          <div class="bg-slate-900 border border-slate-800 border-b-0 rounded-t-xl px-4 py-2 flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Direct TXT Raw Editor</span>
+            <span class="text-[10px] text-emerald-400">Edits sync instantly to View & Editor cards</span>
+          </div>
+          <textarea id="rawTextArea" oninput="handleRawTxtInput()" class="w-full flex-1 bg-slate-900 border border-slate-800 rounded-b-xl p-4 font-mono text-xs text-slate-200 focus:outline-none focus:border-blue-500 resize-none leading-relaxed custom-scrollbar min-h-[550px]" placeholder="Raw file content..."></textarea>
+        </div>
       </div>
     </main>
   </div>
@@ -144,9 +150,7 @@
   <div id="customModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
       <h3 id="modalTitle" class="text-sm font-bold text-emerald-400 uppercase tracking-widest">Add Tag</h3>
-      <div id="modalBody" class="space-y-3">
-        <!-- Dynamic Inputs injected here -->
-      </div>
+      <div id="modalBody" class="space-y-3"></div>
       <div class="flex justify-end gap-2 pt-2">
         <button onclick="closeModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded transition">Cancel</button>
         <button id="modalSubmitBtn" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded transition shadow-sm">Save Tag</button>
@@ -154,7 +158,7 @@
     </div>
   </div>
 
-<!-- Script Logic -->
+  <!-- Script Logic -->
   <script>
     const CLIENT_ID = typeof CONFIG !== 'undefined' ? CONFIG.CLIENT_ID : '';
     const DRIVE_FILE_ID = typeof CONFIG !== 'undefined' ? CONFIG.DRIVE_FILE_ID : '';
@@ -163,6 +167,8 @@
     let accessToken = localStorage.getItem('google_access_token') || null;
     let fileContent = "";
     let parsedEntries = [];
+    let masterIndexEntry = null;
+    let masterTagListEntry = null;
     let allExistingTags = new Set();
     let allExistingCategories = new Set(['PETA TAGS', 'META TAGS', 'LORE TAGS', 'RELATIONS TAGS']);
     let sidebarCollapsed = false;
@@ -262,7 +268,6 @@
 
       if (isConnected) {
         statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 flex-shrink-0';
-        statusDot.title = 'Drive Connected';
         authBtn.innerText = '✓ Drive Connected';
         authBtn.className = 'w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5';
         statusText.innerText = 'Drive Connected';
@@ -332,7 +337,7 @@
           body: fileContent
         });
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        alert('File saved successfully to Google Drive with updated Index!');
+        alert('File saved successfully to Google Drive!');
       } catch (err) {
         console.error(err);
         alert('Save Error: Could not save file content.');
@@ -370,15 +375,28 @@
       currentView = viewName;
       const readerTab = document.getElementById('readerTabBtn');
       const editorTab = document.getElementById('editorTabBtn');
+      const txtTab = document.getElementById('txtTabBtn');
+      const readerView = document.getElementById('readerView');
+      const txtView = document.getElementById('txtView');
 
-      if (viewName === 'reader') {
-        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm';
-        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+      readerTab.className = viewName === 'reader' ? 'px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm' : 'px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+      editorTab.className = viewName === 'editor' ? 'px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm' : 'px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+      txtTab.className = viewName === 'txt' ? 'px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm' : 'px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+
+      if (viewName === 'txt') {
+        readerView.classList.add('hidden');
+        txtView.classList.remove('hidden');
+        document.getElementById('rawTextArea').value = fileContent;
       } else {
-        editorTab.className = 'px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm';
-        readerTab.className = 'px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
+        txtView.classList.add('hidden');
+        readerView.classList.remove('hidden');
+        showFullDocument();
       }
-      showFullDocument();
+    }
+
+    function handleRawTxtInput() {
+      fileContent = document.getElementById('rawTextArea').value;
+      parseLoreContent(fileContent, false);
     }
 
     function escapeHtml(str) {
@@ -394,18 +412,30 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // Bulletproof Parser: Handles any variation in divider spacing between entries
-    function parseLoreContent(text) {
-      // Split strictly by 'ENTRY:' occurrence in the text
+    // Comprehensive Parser supporting Index, Master Tag List, and Entry Cards
+    function parseLoreContent(text, updateTextArea = true) {
       const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
       parsedEntries = [];
+      masterIndexEntry = null;
+      masterTagListEntry = null;
       allExistingTags.clear();
       allExistingCategories.add('PETA TAGS');
       allExistingCategories.add('META TAGS');
       allExistingCategories.add('LORE TAGS');
       allExistingCategories.add('RELATIONS TAGS');
 
+      // 1. Extract Master Index & Master Tag List from top of file
+      const parts = text.split(/={10,}/);
+      if (parts.length > 0 && parts[0].includes('[INDEX]')) {
+        masterIndexEntry = { id: 'index', title: 'THE MASTER LORE INDEX', body: parts[0].trim(), lastEdited: 'Archive' };
+      }
+      const tagListPart = parts.find(p => p.toUpperCase().includes('MASTER TAG LIST'));
+      if (tagListPart) {
+        masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: tagListPart.replace(/THE MASTER TAG LIST/i, '').trim(), lastEdited: 'Archive' };
+      }
+
+      // 2. Parse regular Entry cards
       rawEntryBlocks.forEach((block) => {
         const trimmed = block.trim();
         if (!trimmed || !trimmed.toUpperCase().startsWith('ENTRY:')) return;
@@ -440,7 +470,6 @@
           }
         });
 
-        // Filter out headers, tags, dividers, and dates to capture the true entry body text
         const bodyLines = lines.filter(l => {
           const lt = l.trim();
           if (lt.includes('====') || lt.includes('----') || lt.toUpperCase().startsWith('ENTRY:') || lt.includes('Last Edited:')) return false;
@@ -455,17 +484,22 @@
         parsedEntries.push({ id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block });
       });
 
-      serializeAndSync();
-      showFullDocument();
+      if (updateTextArea) {
+        serializeAndSync();
+      } else {
+        renderSidebarList(parsedEntries);
+      }
+      if (currentView !== 'txt') {
+        showFullDocument();
+      }
     }
 
-    // Serializes everything back into your exact Drive file format with updated top Index list
     function serializeAndSync() {
       const indexListText = parsedEntries.map(e => e.title).join('\n');
-      
       const topIndexHeader = `THE MASTER LORE INDEX\n====================================================================\n\n[INDEX]\n${indexListText}`;
 
-      const masterTagSection = `====================================================================\nTHE MASTER TAG LIST\n\n[PETA TAGS]\nPlaces\n[Areas, regions, domains, and thresholds of interest across the shifting topology of existence—interwoven with the governing factions, cosmic wills, and lingering entities that shape them.]\nPeople [Notable characters, entities, and cosmic presences that manifest or can be referenced across multiple instances and stories in the Spectrum.]\nFactions \n[Notable groups, empires, and governing coalitions that shape, harvest, or rule over the shifting topology of the Spectrum.]\nLore_Bite \n[A collection of Concepts that will bleed into all my works.]\n\n[META TAGS]\nDark Hero / Anti-Hero \nHero \nSlow Burn \nFan-Fiction \nOriginal \nFragment\nSeries\nRomance\n\n[LORE TAGS]\nPhobor / Synod\nVesperatina\nH.I. Corp\nLive\nRaptura\n\n[RELATIONS TAGS]\nPhobos X Vespera X Kaelen X Lyra\nPhobor & Vesperatina`;
+      const masterTagSectionBody = masterTagListEntry ? masterTagListEntry.body : `[PETA TAGS]\nPlaces\n[META TAGS]: Original | Fan-Fiction`;
+      const masterTagSection = `====================================================================\nTHE MASTER TAG LIST\n\n${masterTagSectionBody}`;
 
       let entryBlocks = parsedEntries.map(e => {
         let tagLines = "";
@@ -476,7 +510,8 @@
       });
 
       fileContent = `${topIndexHeader}\n\n${masterTagSection}\n\n${entryBlocks.join('\n\n')}\n`;
-      document.getElementById('rawTextArea').value = fileContent;
+      const rawTextArea = document.getElementById('rawTextArea');
+      if (rawTextArea) rawTextArea.value = fileContent;
       renderSidebarList(parsedEntries);
     }
 
@@ -498,6 +533,15 @@
       }
     }
 
+    function updateSpecialCardBody(type, newBody) {
+      if (type === 'index' && masterIndexEntry) {
+        masterIndexEntry.body = newBody.trim();
+      } else if (type === 'tags' && masterTagListEntry) {
+        masterTagListEntry.body = newBody.trim();
+      }
+      serializeAndSync();
+    }
+
     function renderProcessedBody(bodyText) {
       let formatted = escapeHtml(bodyText);
       const sortedEntries = [...parsedEntries].sort((a, b) => b.title.length - a.title.length);
@@ -513,8 +557,8 @@
     }
 
     function scrollToMasterTagList() {
-      const el = document.getElementById('readerView');
-      if (el) el.scrollTop = 0;
+      const el = document.getElementById('card-tags');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function openModal(title, bodyHtml, onSubmit) {
@@ -560,12 +604,8 @@
         const category = isPetaOnly ? 'PETA TAGS' : document.getElementById('modalCatVal').value.trim().toUpperCase();
         if (!category) return;
 
-        if (!entry.dynamicTags[category]) {
-          entry.dynamicTags[category] = [];
-        }
-        if (!entry.dynamicTags[category].includes(valInput)) {
-          entry.dynamicTags[category].push(valInput);
-        }
+        if (!entry.dynamicTags[category]) entry.dynamicTags[category] = [];
+        if (!entry.dynamicTags[category].includes(valInput)) entry.dynamicTags[category].push(valInput);
         allExistingTags.add(valInput);
         entry.lastEdited = new Date().toISOString().split('T')[0];
         
@@ -579,13 +619,26 @@
       if (!entry || !entry.dynamicTags[category]) return;
 
       entry.dynamicTags[category] = entry.dynamicTags[category].filter(v => v !== tagVal);
-      if (entry.dynamicTags[category].length === 0) {
-        delete entry.dynamicTags[category];
-      }
+      if (entry.dynamicTags[category].length === 0) delete entry.dynamicTags[category];
       entry.lastEdited = new Date().toISOString().split('T')[0];
 
       serializeAndSync();
       showFullDocument();
+    }
+
+    function renderSpecialCard(card) {
+      const isEditable = currentView === 'editor';
+      return `
+        <article id="card-${card.id}" class="bg-slate-900/85 border border-slate-800 rounded-xl p-6 shadow-md space-y-4 hover:border-emerald-500/40 transition">
+          <div class="flex flex-col border-b border-slate-800 pb-3 gap-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-lg font-bold text-emerald-400 tracking-wide">${escapeHtml(card.title)}</h2>
+              <span class="text-xs font-mono text-slate-400">${card.lastEdited}</span>
+            </div>
+          </div>
+          <div ${isEditable ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(card.body)}</div>
+        </article>
+      `;
     }
 
     function renderEntryCard(entry) {
@@ -604,11 +657,8 @@
               ${isEditable ? `<button onclick="removeTag(${entry.id}, '${cat}', '${escapeQuotes(val)}')" class="text-rose-400 hover:text-rose-200 font-bold ml-0.5 text-[9px]" title="Remove tag">×</button>` : ''}
             </span>
           `;
-          if (isPeta) {
-            petaHtml += bubbleMarkup;
-          } else {
-            otherTagsHtml += bubbleMarkup;
-          }
+          if (isPeta) petaHtml += bubbleMarkup;
+          else otherTagsHtml += bubbleMarkup;
         });
       }
 
@@ -639,16 +689,23 @@
     function showFullDocument() {
       const container = document.getElementById('readerView');
       if (parsedEntries.length === 0) {
-        container.innerHTML = `
-          <div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
-            <p class="text-sm font-medium">No valid entries found.</p>
-          </div>`;
+        container.innerHTML = `<div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20"><p class="text-sm font-medium">No valid entries found.</p></div>`;
         return;
       }
-      container.innerHTML = parsedEntries.map(e => renderEntryCard(e)).join('');
+
+      let html = '';
+      if (masterIndexEntry) html += renderSpecialCard(masterIndexEntry);
+      if (masterTagListEntry) html += renderSpecialCard(masterTagListEntry);
+      html += parsedEntries.map(e => renderEntryCard(e)).join('');
+      container.innerHTML = html;
     }
 
     function scrollToEntry(id) {
+      if (id === 'index' || id === 'tags') {
+        const el = document.getElementById('card-' + id);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
       const el = document.getElementById('entry-' + id);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -664,11 +721,16 @@
 
     function renderSidebarList(entries) {
       const indexList = document.getElementById('indexList');
-      indexList.innerHTML = entries.map(e => `
+      let html = `
+        <div onclick="scrollToEntry('index')" class="text-emerald-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER LORE INDEX</div>
+        <div onclick="scrollToEntry('tags')" class="text-amber-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER TAG LIST</div>
+      `;
+      html += entries.map(e => `
         <div onclick="scrollToEntry(${e.id})" class="text-slate-300 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-medium transition" title="${escapeHtml(e.title)}">
           • ${escapeHtml(e.title)}
         </div>
       `).join('');
+      indexList.innerHTML = html;
     }
 
     function filterEntries() {
