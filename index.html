@@ -1,171 +1,4 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lore Indexor - Master Archive & Editor</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            darkbg: '#0f172a',
-            cardbg: '#1e293b',
-          }
-        }
-      }
-    }
-  </script>
-  <!-- Google Identity Services SDK -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <!-- Load Private Config -->
-  <script src="config.js"></script>
-  <style>
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
-    
-    aside { 
-      transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
-      width: 320px; 
-      touch-action: pan-y; 
-    }
-    aside.collapsed { width: 0px !important; padding: 0 !important; border: none !important; overflow: hidden !important; }
-    
-    .lore-link { color: #60a5fa; text-decoration: underline; cursor: pointer; }
-    .lore-link:hover { color: #93c5fd; }
-  </style>
-</head>
-<body class="bg-slate-950 text-slate-100 h-[100dvh] w-screen flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950 overflow-hidden relative">
-
-  <!-- Main App Layout -->
-  <div class="flex flex-1 h-full w-full overflow-hidden relative">
-    
-    <!-- Sidebar -->
-    <aside id="sidebar" class="bg-slate-900 border-r border-slate-800 flex flex-col p-4 gap-3 select-none z-20 h-full flex-shrink-0 relative">
-      <!-- Header & Collapse Toggle -->
-      <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-shrink-0">
-        <div class="overflow-hidden">
-          <h1 class="text-xs md:text-sm font-black tracking-widest text-emerald-400 whitespace-nowrap">LORE INDEXOR</h1>
-          <p class="text-[9px] text-slate-400 tracking-wider whitespace-nowrap">Master Archive v4.9</p>
-        </div>
-        <button onclick="toggleSidebar()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 text-xs transition shadow-sm" title="Collapse Sidebar">
-          <span class="font-bold">◀</span>
-        </button>
-      </div>
-
-      <!-- Sidebar Content Container -->
-      <div class="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 text-xs custom-scrollbar min-h-0">
-        
-        <!-- Drive Auth & Sync Controls -->
-        <div class="flex flex-col gap-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/80">
-          <button id="authBtn" onclick="handleAuthClick()" class="w-full py-2 px-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap">
-            <span>Connect Google Drive</span>
-          </button>
-          <div class="flex gap-1.5">
-            <button onclick="fetchDriveFile()" class="flex-1 py-1 px-2 bg-slate-800 hover:bg-slate-700 text-[11px] font-medium rounded border border-slate-700 text-slate-300 transition">
-              Fetch Drive
-            </button>
-            <button onclick="saveDriveFile()" class="flex-1 py-1 px-2 bg-blue-600 hover:bg-blue-500 text-[11px] font-semibold rounded text-white transition shadow-sm">
-              Save Drive
-            </button>
-          </div>
-          <div class="flex items-center gap-2 mt-0.5 px-1">
-            <div id="driveStatus" class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0" title="Disconnected"></div>
-            <span id="statusText" class="text-[11px] text-slate-400 truncate">Drive Disconnected</span>
-          </div>
-        </div>
-
-        <!-- Search Filter -->
-        <div class="relative">
-          <input type="text" id="searchInput" placeholder="Search entries, tags..." oninput="filterEntries()" class="w-full bg-slate-950 border border-slate-800 rounded-md px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition">
-        </div>
-
-        <!-- Index List -->
-        <div class="flex-1 min-h-0 flex flex-col">
-          <div class="flex items-center justify-between mb-1.5 flex-shrink-0">
-            <span class="text-[10px] text-slate-500 uppercase tracking-widest font-extrabold">Lore Index</span>
-            <button onclick="showFullDocument()" class="text-[10px] text-emerald-400 hover:underline">Top of Archive</button>
-          </div>
-          <div id="indexList" class="text-slate-400 italic text-xs space-y-0.5 overflow-y-auto flex-1 custom-scrollbar">No file loaded...</div>
-        </div>
-
-        <!-- Add Entry Button -->
-        <button onclick="addNewEntry()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black rounded text-xs transition shadow-sm mt-2 flex-shrink-0">
-          + Add New Entry
-        </button>
-      </div>
-    </aside>
-
-    <!-- Content Workspace -->
-    <main class="flex-1 flex flex-col bg-slate-950 overflow-hidden h-full">
-      <!-- View Toggle Bar -->
-      <header class="bg-slate-900 border-b border-slate-800 px-4 md:px-6 py-2.5 flex items-center justify-between select-none flex-shrink-0 gap-2">
-        <div class="flex items-center gap-2">
-          <!-- Expand Sidebar Button (Visible only when collapsed) -->
-          <button onclick="toggleSidebar()" id="expandBtn" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md transition hidden shadow-sm flex-shrink-0" title="Expand Sidebar">
-            ▶
-          </button>
-          <div class="flex gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-800">
-            <button id="readerTabBtn" onclick="switchView('reader')" class="px-3 md:px-4 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm">View</button>
-            <button id="editorTabBtn" onclick="switchView('editor')" class="px-3 md:px-4 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition">Editor</button>
-          </div>
-        </div>
-        <div class="flex gap-2">
-          <label class="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-xs font-medium text-slate-200 cursor-pointer transition flex items-center gap-1.5">
-            <span>Open Local</span>
-            <input type="file" id="localFileInput" accept=".txt,.md" onchange="handleLocalFileLoad(event)" class="hidden">
-          </label>
-          <button onclick="copyRawText()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md text-xs font-medium text-slate-200 transition hidden sm:block">Copy Raw</button>
-        </div>
-      </header>
-
-      <!-- View Containers -->
-      <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0">
-        <!-- Reader View -->
-        <div id="readerView" class="max-w-4xl mx-auto space-y-6 pb-12">
-          <div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
-            <p class="text-sm font-medium">No master lore file currently loaded into Lore Indexor.</p>
-            <p class="text-xs text-slate-600 mt-1">Connect Google Drive, fetch file, or open a local .txt file.</p>
-          </div>
-        </div>
-
-        <!-- Raw Text Editor View -->
-        <div id="editorView" class="hidden h-full max-w-4xl mx-auto flex flex-col pb-6">
-          <!-- Text Formatting Toolbar -->
-          <div class="bg-slate-900 border border-slate-800 border-b-0 rounded-t-xl p-2 flex flex-wrap gap-1.5 items-center">
-            <button onclick="insertFormatting('**', '**')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded font-mono" title="Bold">B</button>
-            <button onclick="insertFormatting('*', '*')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs italic rounded font-serif" title="Italic">I</button>
-            <button onclick="insertFormatting('~~', '~~')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs line-through rounded" title="Strikethrough">S</button>
-            <div class="h-4 w-[1px] bg-slate-700 mx-1"></div>
-            <button onclick="insertFormatting('\n* ', '')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded" title="Bullet List">• List</button>
-            <button onclick="insertFormatting('\n1. ', '')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded" title="Numbered List">1. Num</button>
-          </div>
-          <textarea id="rawTextArea" oninput="handleEditorInput()" class="w-full flex-1 bg-slate-900 border border-slate-800 rounded-b-xl p-4 font-mono text-xs text-slate-200 focus:outline-none focus:border-blue-500 resize-none leading-relaxed custom-scrollbar min-h-[550px]" placeholder="Raw file content will appear here..."></textarea>
-        </div>
-      </div>
-    </main>
-  </div>
-
-  <!-- Custom In-App Modal Dialog -->
-  <div id="customModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
-      <h3 id="modalTitle" class="text-sm font-bold text-emerald-400 uppercase tracking-widest">Add Tag</h3>
-      <div id="modalBody" class="space-y-3">
-        <!-- Dynamic Inputs injected here -->
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button onclick="closeModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded transition">Cancel</button>
-        <button id="modalSubmitBtn" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded transition shadow-sm">Save Tag</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Script Logic -->
+<!-- Script Logic -->
   <script>
     const CLIENT_ID = typeof CONFIG !== 'undefined' ? CONFIG.CLIENT_ID : '';
     const DRIVE_FILE_ID = typeof CONFIG !== 'undefined' ? CONFIG.DRIVE_FILE_ID : '';
@@ -228,13 +61,11 @@
       touchCurrentX = e.touches[0].clientX;
       const diffX = touchCurrentX - touchStartX;
 
-      // Swipe left to close sidebar when open
       if (!sidebarCollapsed && diffX < -70 && touchStartX < 350) {
         toggleSidebar();
         touchStartX = touchCurrentX;
       }
       
-      // Swipe right from left edge to open sidebar when collapsed
       if (sidebarCollapsed && diffX > 70 && touchStartX < 40) {
         toggleSidebar();
         touchStartX = touchCurrentX;
@@ -578,16 +409,6 @@
           rawBlock = rawBlock.replace(/(ENTRY:[^\n]+\n)/i, `$1[${category}]: ${valInput}\n`);
         }
 
-        const masterListEntry = parsedEntries.find(e => e.title.toUpperCase().includes('MASTER TAG LIST') || e.title.toUpperCase().includes('TAG LIST'));
-        if (masterListEntry) {
-          let masterRaw = masterListEntry.raw;
-          const masterPattern = new RegExp(`\\[\\s*${category}\\s*\\]\\s*:\\s*(.+)`, 'i');
-          if (masterPattern.test(masterRaw)) {
-            masterRaw = masterRaw.replace(masterPattern, (match, p1) => `[${category}]: ${p1.trim()} | ${valInput}`);
-            fileContent = fileContent.replace(masterListEntry.raw, masterRaw);
-          }
-        }
-
         const today = new Date().toISOString().split('T')[0];
         if (rawBlock.includes('Last Edited:')) {
           rawBlock = rawBlock.replace(/Last Edited:\s*[0-9-]+/, `Last Edited: ${today}`);
@@ -644,7 +465,6 @@
           const bubbleMarkup = `
             <span class="relative group/tag inline-flex items-center gap-1 px-2.5 py-0.5 ${style.bg} ${style.text} text-[10px] font-mono rounded-full border ${style.border} transition">
               <span onclick="scrollToMasterTagList()" class="cursor-pointer hover:underline" title="${cat}">${escapeHtml(val)}</span>
-              <!-- Editor View Remove (X) Button -->
               <button onclick="removeTag(${entry.id}, '${cat}', '${escapeQuotes(val)}')" class="${currentView === 'editor' ? '' : 'hidden'} editor-remove-btn text-rose-400 hover:text-rose-200 font-bold ml-0.5 text-[9px]" title="Remove tag">×</button>
             </span>
           `;
@@ -658,21 +478,18 @@
 
       return `
         <article id="entry-${entry.id}" class="bg-slate-900/80 border border-slate-800 rounded-xl p-6 shadow-md space-y-4 hover:border-emerald-500/40 transition">
-          <!-- PETA Tags & Dedicated + Peta Button Above Entry Name -->
           ${!isIndex ? `
           <div class="flex flex-wrap gap-1.5 items-center">
             ${petaHtml}
             <button onclick="promptAddTag(${entry.id}, 'PETA TAGS')" class="${currentView === 'editor' ? '' : 'hidden'} editor-add-btn px-2 py-0.5 bg-slate-800 hover:bg-purple-600 hover:text-slate-950 text-slate-400 text-[10px] font-bold rounded-full border border-slate-700 transition" title="Add PETA Tag">+ Peta</button>
           </div>` : ''}
 
-          <!-- Entry Name & Date on the same line -->
           <div class="flex flex-col border-b border-slate-800 pb-3 gap-2.5">
             <div class="flex items-center justify-between gap-2">
               <h2 class="text-lg font-bold text-slate-100 tracking-wide">${escapeHtml(entry.title)}</h2>
               <span class="text-xs font-mono text-slate-400 font-normal flex-shrink-0">${escapeHtml(entry.lastEdited)}</span>
             </div>
             
-            <!-- Other Tags & Dedicated + Tag Button Below Entry Name -->
             ${!isIndex ? `
             <div class="flex flex-wrap gap-1.5 items-center">
               ${otherTagsHtml}
@@ -748,12 +565,23 @@
       filterEntries();
     }
 
+    // Fixed Add New Entry Function
     function addNewEntry() {
-      const newEntryText = `\nENTRY: New Lore Entry\n[Last Edited: ${new Date().toISOString().split('T')[0]}]\n[META TAGS]: General\n\nWrite your entry content here...\n`;
-      fileContent += newEntryText;
+      const today = new Date().toISOString().split('T')[0];
+      const newEntryBlock = `\n====================================================================\nENTRY: New Lore Entry\n[Last Edited: ${today}]\n[META TAGS]: General\n\nWrite your entry content here...\n`;
+      
+      // Append properly formatted block with dividers
+      fileContent += newEntryBlock;
       document.getElementById('rawTextArea').value = fileContent;
-      parseLoreContent(fileContent);
-      scrollToEntry(parsedEntries[parsedEntries.length - 1].id);
+      
+      // Re-parse and keep user in reader view
+      parseLoreContent(fileContent, true);
+      switchView('reader');
+      
+      // Scroll smoothly to the newly created entry card
+      if (parsedEntries.length > 0) {
+        scrollToEntry(parsedEntries[parsedEntries.length - 1].id);
+      }
     }
 
     function copyRawText() {
@@ -776,5 +604,3 @@
       handleEditorInput();
     }
   </script>
-</body>
-</html>
