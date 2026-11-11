@@ -262,6 +262,7 @@
 
       if (isConnected) {
         statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 flex-shrink-0';
+        statusDot.title = 'Drive Connected';
         authBtn.innerText = '✓ Drive Connected';
         authBtn.className = 'w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5';
         statusText.innerText = 'Drive Connected';
@@ -393,9 +394,9 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // Robust Parser: Splits strictly by dividers and only parses blocks containing ENTRY:
+    // Precise Parser: Splits file directly by ENTRY: headers so every card captures title, tags, and body correctly
     function parseLoreContent(text) {
-      const rawBlocks = text.split(/(?:^|\n)[=]{10,}(?:\n|$)/g);
+      const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
       parsedEntries = [];
       allExistingTags.clear();
@@ -404,16 +405,15 @@
       allExistingCategories.add('LORE TAGS');
       allExistingCategories.add('RELATIONS TAGS');
 
-      rawBlocks.forEach((block) => {
+      rawEntryBlocks.forEach((block) => {
         const trimmed = block.trim();
-        if (!trimmed) return;
+        if (!trimmed || !trimmed.toUpperCase().startsWith('ENTRY:')) return;
 
         const lines = trimmed.split('\n');
-        // ONLY parse blocks that explicitly contain an ENTRY: line
-        let titleLine = lines.find(l => l.toUpperCase().startsWith('ENTRY:'));
-        if (!titleLine) return;
-
+        const titleLine = lines[0] || '';
         const title = titleLine.replace(/^ENTRY:\s*/i, '').trim();
+        if (!title) return;
+
         let lastEdited = new Date().toISOString().split('T')[0];
         const dateLine = lines.find(l => l.includes('Last Edited:'));
         if (dateLine) {
@@ -439,9 +439,10 @@
           }
         });
 
+        // Everything that is not a header, tag line, or divider is part of the body
         const bodyLines = lines.filter(l => {
-          if (l.includes('====') || l.includes('----') || l === titleLine || l.includes('Last Edited:')) return false;
           const lt = l.trim();
+          if (lt.includes('====') || lt.includes('----') || lt.toUpperCase().startsWith('ENTRY:') || lt.includes('Last Edited:')) return false;
           let match = lt.match(tagLineRegexOutside) || lt.match(tagLineRegexInside);
           if (match && !match[1].toUpperCase().includes('LAST EDITED')) return false;
           return true;
