@@ -165,7 +165,7 @@
     </div>
   </div>
 
-  <!-- Script Logic -->
+<!-- Script Logic -->
   <script>
     const CLIENT_ID = typeof CONFIG !== 'undefined' ? CONFIG.CLIENT_ID : '';
     const DRIVE_FILE_ID = typeof CONFIG !== 'undefined' ? CONFIG.DRIVE_FILE_ID : '';
@@ -205,7 +205,6 @@
       initGoogleDriveSDK();
     };
 
-    // Mobile viewport persistence & bfcache restoration
     window.addEventListener('pageshow', function (event) {
       if (event.persisted) {
         window.dispatchEvent(new Event('resize'));
@@ -215,7 +214,6 @@
       }
     });
 
-    // Sidebar Touch Swipe Gestures
     let touchStartX = 0;
     let touchCurrentX = 0;
     const sidebar = document.getElementById('sidebar');
@@ -425,7 +423,8 @@
     }
 
     function parseLoreContent(text, reRenderReader = true) {
-      const rawBlocks = text.split(/(?=\n=+\s*\nENTRY:|\nENTRY:|\n#{1,3}\s*ENTRY:|^ENTRY:)/gi);
+      // Split strictly by divider lines or explicit ENTRY blocks
+      const rawBlocks = text.split(/(?:^|\n)[=]{10,}(?:\n|$)/g);
       
       parsedEntries = [];
       allExistingTags.clear();
@@ -437,23 +436,23 @@
 
       rawBlocks.forEach((block, idx) => {
         const trimmed = block.trim();
-        if (!trimmed || trimmed.replace(/^[=-]+|[=-]+$/g, '').trim() === '') return;
+        if (!trimmed) return;
 
         let title = '';
-        if (idx === 0 || trimmed.startsWith('[INDEX]')) {
+        let dynamicTags = {};
+        const lines = trimmed.split('\n');
+
+        // Check if this block is the initial Index table of contents or Master Tag List
+        if (idx === 0 && !trimmed.toUpperCase().includes('ENTRY:')) {
           title = 'INDEX';
         } else if (trimmed.toUpperCase().includes('MASTER TAG LIST') || trimmed.toUpperCase().includes('TAG LIST')) {
           title = 'THE MASTER TAG LIST';
         } else {
-          const lines = trimmed.split('\n');
           let titleLine = lines.find(l => l.toUpperCase().includes('ENTRY:') || l.startsWith('#')) || lines[0];
           title = titleLine.replace(/^#+\s*/, '').replace(/^ENTRY:\s*/i, '').replace(/^[=-]+|[=-]+$/g, '').trim();
           if (!title) title = `Lore Entry ${idx + 1}`;
         }
 
-        const lines = trimmed.split('\n');
-        let titleLine = lines.find(l => l.toUpperCase().includes('ENTRY:') || l.startsWith('#')) || lines[0];
-        
         let lastEdited = new Date().toISOString().split('T')[0];
         const dateLine = lines.find(l => l.includes('Last Edited:'));
         if (dateLine) {
@@ -461,7 +460,6 @@
           if (dateMatch) lastEdited = dateMatch[1];
         }
 
-        let dynamicTags = {};
         const tagLineRegexOutside = /^\[\s*([A-Z\s_-]+)\s*\]\s*:\s*(.+)$/i;
         const tagLineRegexInside = /^\[\s*([A-Z\s_-]+)\s*:\s*(.+)\s*\]$/i;
 
@@ -479,6 +477,7 @@
           }
         });
 
+        const titleLine = lines.find(l => l.toUpperCase().includes('ENTRY:') || l.startsWith('#')) || '';
         const bodyLines = lines.filter(l => {
           if (l.includes('====') || l.includes('----') || l === titleLine || l.includes('Last Edited:')) return false;
           const lt = l.trim();
@@ -503,7 +502,7 @@
       const sortedEntries = [...parsedEntries].sort((a, b) => b.title.length - a.title.length);
       
       sortedEntries.forEach(entry => {
-        if (entry.title && entry.title !== 'INDEX') {
+        if (entry.title && entry.title !== 'INDEX' && entry.title !== 'THE MASTER TAG LIST') {
           const escapedTitle = entry.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
           const regex = new RegExp(`\\b(${escapedTitle})\\b`, 'g');
           formatted = formatted.replace(regex, `<span class="lore-link" onclick="scrollToEntryTitle('${escapeQuotes(entry.title)}')">$1</span>`);
@@ -705,7 +704,8 @@
 
     function renderSidebarList(entries) {
       const indexList = document.getElementById('indexList');
-      indexList.innerHTML = entries.map(e => `
+      const validEntries = entries.filter(e => e.title !== 'INDEX' && e.title !== 'THE MASTER TAG LIST');
+      indexList.innerHTML = validEntries.map(e => `
         <div onclick="scrollToEntry(${e.id})" class="text-slate-300 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-medium transition" title="${escapeHtml(e.title)}">
           • ${escapeHtml(e.title)}
         </div>
