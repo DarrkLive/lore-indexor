@@ -393,7 +393,7 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // Accurate Parser matching your exact Drive structure
+    // Robust Parser: Splits strictly by dividers and only parses blocks containing ENTRY:
     function parseLoreContent(text) {
       const rawBlocks = text.split(/(?:^|\n)[=]{10,}(?:\n|$)/g);
       
@@ -409,11 +409,9 @@
         if (!trimmed) return;
 
         const lines = trimmed.split('\n');
-        let titleLine = lines.find(l => l.toUpperCase().startsWith('ENTRY:')) || '';
-        
-        if (!titleLine) {
-          return; // Skip non-entry blocks like the top index or header metadata
-        }
+        // ONLY parse blocks that explicitly contain an ENTRY: line
+        let titleLine = lines.find(l => l.toUpperCase().startsWith('ENTRY:'));
+        if (!titleLine) return;
 
         const title = titleLine.replace(/^ENTRY:\s*/i, '').trim();
         let lastEdited = new Date().toISOString().split('T')[0];
