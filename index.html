@@ -89,7 +89,7 @@
         <div class="flex-1 min-h-0 flex flex-col">
           <div class="flex items-center justify-between mb-1.5 flex-shrink-0">
             <span class="text-[10px] text-slate-500 uppercase tracking-widest font-extrabold">Lore Index</span>
-            <button onclick="showFullDocument()" class="text-[10px] text-emerald-400 hover:underline">Top of Archive</button>
+            <button onclick="scrollToCard('index')" class="text-[10px] text-emerald-400 hover:underline">Top of Archive</button>
           </div>
           <div id="indexList" class="text-slate-400 italic text-xs space-y-0.5 overflow-y-auto flex-1 custom-scrollbar">No file loaded...</div>
         </div>
@@ -127,7 +127,7 @@
 
       <!-- View Containers -->
       <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0 relative">
-        <!-- Reader View (Cards & Index / Tag List Cards) -->
+        <!-- Reader & Card Editor View -->
         <div id="readerView" class="max-w-4xl mx-auto space-y-6 pb-12">
           <div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20">
             <p class="text-sm font-medium">No master lore file currently loaded into Lore Indexor.</p>
@@ -384,9 +384,9 @@
       txtTab.className = viewName === 'txt' ? 'px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm' : 'px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
 
       if (viewName === 'txt') {
+        serializeAndSync();
         readerView.classList.add('hidden');
         txtView.classList.remove('hidden');
-        document.getElementById('rawTextArea').value = fileContent;
       } else {
         txtView.classList.add('hidden');
         readerView.classList.remove('hidden');
@@ -412,30 +412,28 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // Comprehensive Parser supporting Index, Master Tag List, and Entry Cards
     function parseLoreContent(text, updateTextArea = true) {
       const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
       parsedEntries = [];
-      masterIndexEntry = null;
-      masterTagListEntry = null;
       allExistingTags.clear();
       allExistingCategories.add('PETA TAGS');
       allExistingCategories.add('META TAGS');
       allExistingCategories.add('LORE TAGS');
       allExistingCategories.add('RELATIONS TAGS');
 
-      // 1. Extract Master Index & Master Tag List from top of file
+      // Extract Master Index Card
+      masterIndexEntry = { id: 'index', title: 'THE MASTER LORE INDEX', body: `[INDEX]\n${text.split(/={10,}/)[0].replace(/THE MASTER LORE INDEX/i, '').trim()}`, lastEdited: 'Archive' };
+
+      // Extract Master Tag List Card
       const parts = text.split(/={10,}/);
-      if (parts.length > 0 && parts[0].includes('[INDEX]')) {
-        masterIndexEntry = { id: 'index', title: 'THE MASTER LORE INDEX', body: parts[0].trim(), lastEdited: 'Archive' };
-      }
-      const tagListPart = parts.find(p => p.toUpperCase().includes('MASTER TAG LIST'));
-      if (tagListPart) {
-        masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: tagListPart.replace(/THE MASTER TAG LIST/i, '').trim(), lastEdited: 'Archive' };
+      const tagPart = parts.find(p => p.toUpperCase().includes('MASTER TAG LIST'));
+      if (tagPart) {
+        masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: tagPart.replace(/THE MASTER TAG LIST/i, '').trim(), lastEdited: 'Archive' };
+      } else {
+        masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: '[PETA TAGS]\nPlaces\n\n[META TAGS]\nOriginal | Fan-Fiction', lastEdited: 'Archive' };
       }
 
-      // 2. Parse regular Entry cards
       rawEntryBlocks.forEach((block) => {
         const trimmed = block.trim();
         if (!trimmed || !trimmed.toUpperCase().startsWith('ENTRY:')) return;
@@ -484,22 +482,39 @@
         parsedEntries.push({ id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block });
       });
 
-      if (updateTextArea) {
-        serializeAndSync();
-      } else {
-        renderSidebarList(parsedEntries);
-      }
-      if (currentView !== 'txt') {
-        showFullDocument();
-      }
+      if (updateTextArea) serializeAndSync();
+      else renderSidebarList(parsedEntries);
+      if (currentView !== 'txt') showFullDocument();
     }
 
     function serializeAndSync() {
       const indexListText = parsedEntries.map(e => e.title).join('\n');
       const topIndexHeader = `THE MASTER LORE INDEX\n====================================================================\n\n[INDEX]\n${indexListText}`;
 
-      const masterTagSectionBody = masterTagListEntry ? masterTagListEntry.body : `[PETA TAGS]\nPlaces\n[META TAGS]: Original | Fan-Fiction`;
-      const masterTagSection = `====================================================================\nTHE MASTER TAG LIST\n\n${masterTagSectionBody}`;
+      // Automatically inject newly created tags into the Master Tag List body text
+      let tagBody = masterTagListEntry ? masterTagListEntry.body : '';
+      for (const cat of allExistingCategories) {
+        const matchingEntriesTags = [];
+        parsedEntries.forEach(e => {
+          if (e.dynamicTags[cat]) matchingEntriesTags.push(...e.dynamicTags[cat]);
+        });
+        const uniqueVals = [...new Set(matchingEntriesTags)];
+        if (uniqueVals.length > 0) {
+          const catHeader = `[${cat}]`;
+          const formattedValStr = uniqueVals.join(' | ');
+          if (tagBody.includes(catHeader)) {
+            // Replace existing category line with updated unique tags
+            const regex = new RegExp(`\\[${cat}\\][\\s\\S]*?(?=\\n\\[[A-Z\\s]+\\]|$)`, 'i');
+            tagBody = tagBody.replace(regex, `${catHeader}\n${formattedValStr}`);
+          } else {
+            tagBody += `\n\n${catHeader}\n${formattedValStr}`;
+          }
+        }
+      }
+
+      if (masterTagListEntry) masterTagListEntry.body = tagBody.trim();
+
+      const masterTagSection = `====================================================================\nTHE MASTER TAG LIST\n\n${masterTagListEntry ? masterTagListEntry.body : ''}`;
 
       let entryBlocks = parsedEntries.map(e => {
         let tagLines = "";
@@ -534,11 +549,8 @@
     }
 
     function updateSpecialCardBody(type, newBody) {
-      if (type === 'index' && masterIndexEntry) {
-        masterIndexEntry.body = newBody.trim();
-      } else if (type === 'tags' && masterTagListEntry) {
-        masterTagListEntry.body = newBody.trim();
-      }
+      if (type === 'index' && masterIndexEntry) masterIndexEntry.body = newBody.trim();
+      else if (type === 'tags' && masterTagListEntry) masterTagListEntry.body = newBody.trim();
       serializeAndSync();
     }
 
@@ -556,8 +568,8 @@
       return formatted;
     }
 
-    function scrollToMasterTagList() {
-      const el = document.getElementById('card-tags');
+    function scrollToCard(cardId) {
+      const el = document.getElementById('card-' + cardId);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -607,6 +619,7 @@
         if (!entry.dynamicTags[category]) entry.dynamicTags[category] = [];
         if (!entry.dynamicTags[category].includes(valInput)) entry.dynamicTags[category].push(valInput);
         allExistingTags.add(valInput);
+        allExistingCategories.add(category);
         entry.lastEdited = new Date().toISOString().split('T')[0];
         
         serializeAndSync();
@@ -628,15 +641,16 @@
 
     function renderSpecialCard(card) {
       const isEditable = currentView === 'editor';
+      const isIndex = card.id === 'index';
       return `
         <article id="card-${card.id}" class="bg-slate-900/85 border border-slate-800 rounded-xl p-6 shadow-md space-y-4 hover:border-emerald-500/40 transition">
           <div class="flex flex-col border-b border-slate-800 pb-3 gap-2.5">
             <div class="flex items-center justify-between gap-2">
-              <h2 class="text-lg font-bold text-emerald-400 tracking-wide">${escapeHtml(card.title)}</h2>
+              <h2 class="text-lg font-bold ${isIndex ? 'text-emerald-400' : 'text-amber-400'} tracking-wide">${escapeHtml(card.title)}</h2>
               <span class="text-xs font-mono text-slate-400">${card.lastEdited}</span>
             </div>
           </div>
-          <div ${isEditable ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(card.body)}</div>
+          <div ${isEditable && !isIndex ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(card.body)}</div>
         </article>
       `;
     }
@@ -653,7 +667,7 @@
         vals.forEach(val => {
           const bubbleMarkup = `
             <span class="relative group/tag inline-flex items-center gap-1 px-2.5 py-0.5 ${style.bg} ${style.text} text-[10px] font-mono rounded-full border ${style.border} transition">
-              <span class="cursor-pointer hover:underline" title="${cat}">${escapeHtml(val)}</span>
+              <span onclick="scrollToCard('tags')" class="cursor-pointer hover:underline" title="Jump to Master Tag List">${escapeHtml(val)}</span>
               ${isEditable ? `<button onclick="removeTag(${entry.id}, '${cat}', '${escapeQuotes(val)}')" class="text-rose-400 hover:text-rose-200 font-bold ml-0.5 text-[9px]" title="Remove tag">×</button>` : ''}
             </span>
           `;
@@ -688,11 +702,6 @@
 
     function showFullDocument() {
       const container = document.getElementById('readerView');
-      if (parsedEntries.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-500 py-24 border border-dashed border-slate-800 rounded-2xl bg-slate-900/20"><p class="text-sm font-medium">No valid entries found.</p></div>`;
-        return;
-      }
-
       let html = '';
       if (masterIndexEntry) html += renderSpecialCard(masterIndexEntry);
       if (masterTagListEntry) html += renderSpecialCard(masterTagListEntry);
@@ -701,11 +710,6 @@
     }
 
     function scrollToEntry(id) {
-      if (id === 'index' || id === 'tags') {
-        const el = document.getElementById('card-' + id);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
-      }
       const el = document.getElementById('entry-' + id);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -722,8 +726,8 @@
     function renderSidebarList(entries) {
       const indexList = document.getElementById('indexList');
       let html = `
-        <div onclick="scrollToEntry('index')" class="text-emerald-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER LORE INDEX</div>
-        <div onclick="scrollToEntry('tags')" class="text-amber-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER TAG LIST</div>
+        <div onclick="scrollToCard('index')" class="text-emerald-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER LORE INDEX</div>
+        <div onclick="scrollToCard('tags')" class="text-amber-400 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-bold transition">• THE MASTER TAG LIST</div>
       `;
       html += entries.map(e => `
         <div onclick="scrollToEntry(${e.id})" class="text-slate-300 py-1 px-2 rounded hover:bg-slate-800/50 truncate cursor-pointer font-medium transition" title="${escapeHtml(e.title)}">
@@ -741,11 +745,11 @@
         Object.values(e.dynamicTags).flat().some(v => v.toLowerCase().includes(query))
       );
       const container = document.getElementById('readerView');
-      if (filtered.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-500 py-24">No matching lore entries found.</div>`;
-      } else {
-        container.innerHTML = filtered.map(e => renderEntryCard(e)).join('');
-      }
+      let html = '';
+      if (masterIndexEntry) html += renderSpecialCard(masterIndexEntry);
+      if (masterTagListEntry) html += renderSpecialCard(masterTagListEntry);
+      html += filtered.map(e => renderEntryCard(e)).join('');
+      container.innerHTML = html;
     }
 
     function addNewEntry() {
