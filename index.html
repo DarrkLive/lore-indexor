@@ -51,7 +51,7 @@
       <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-shrink-0">
         <div class="overflow-hidden">
           <h1 class="text-xs md:text-sm font-black tracking-widest text-emerald-400 whitespace-nowrap">LORE INDEXOR</h1>
-          <p class="text-[9px] text-slate-400 tracking-wider whitespace-nowrap">Master Archive v5.0</p>
+          <p class="text-[9px] text-slate-400 tracking-wider whitespace-nowrap">Master Archive v5.1</p>
         </div>
         <button onclick="toggleSidebar()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 text-xs transition shadow-sm" title="Collapse Sidebar">
           <span class="font-bold">◀</span>
@@ -570,10 +570,10 @@
       }
     }
 
-    function updateEntryBody(id, newBody) {
+    function updateEntryBody(id, newBodyHtml) {
       const entry = parsedEntries.find(e => e.id === id);
-      if (entry && entry.body !== newBody.trim()) {
-        entry.body = newBody.trim();
+      if (entry && entry.body !== newBodyHtml.trim()) {
+        entry.body = newBodyHtml.trim();
         entry.lastEdited = new Date().toISOString().split('T')[0];
         serializeAndSync();
       }
@@ -609,7 +609,7 @@
     }
 
     function renderProcessedBody(bodyText) {
-      let formatted = escapeHtml(bodyText);
+      let formatted = bodyText;
       const sortedEntries = [...parsedEntries].sort((a, b) => b.title.length - a.title.length);
       
       sortedEntries.forEach(entry => {
@@ -727,7 +727,6 @@
       
       let cardBodyHtml = escapeHtml(card.body);
       if (isIndex) {
-        // Render Master Lore Index dynamically with clickable quick links
         const sortedTitles = parsedEntries.map(e => e.title);
         cardBodyHtml = `[INDEX]\n` + sortedTitles.map(t => `<span class="lore-link" onclick="scrollToEntryTitle('${escapeQuotes(t)}')">${escapeHtml(t)}</span>`).join('\n');
       }
@@ -798,7 +797,7 @@
           
           <div>
             ${formattingToolbar}
-            <div ${isEditable ? `contenteditable="true" onblur="updateEntryBody(${entry.id}, this.innerHTML)"` : ''} class="text-xs text-slate-300 font-sans leading-relaxed outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${isEditable ? entry.body : renderProcessedBody(entry.body)}</div>
+            <div ${isEditable ? `contenteditable="true" onblur="updateEntryBody(${entry.id}, this.innerHTML)"` : ''} class="text-xs text-slate-300 font-sans leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${renderProcessedBody(entry.body)}</div>
           </div>
         </article>
       `;
@@ -882,3 +881,5 @@
       });
     }
   </script>
+</body>
+</html>
