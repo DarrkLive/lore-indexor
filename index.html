@@ -158,10 +158,11 @@
     </div>
   </div>
 
-  <!-- Script Logic -->
+<!-- Script Logic -->
   <script>
     const CLIENT_ID = typeof CONFIG !== 'undefined' ? CONFIG.CLIENT_ID : '';
     const DRIVE_FILE_ID = typeof CONFIG !== 'undefined' ? CONFIG.DRIVE_FILE_ID : '';
+    const LOCAL_BACKUP_KEY = 'lore_indexor_unsaved_backup';
 
     let tokenClient;
     let accessToken = localStorage.getItem('google_access_token') || null;
@@ -174,6 +175,8 @@
     let allExistingCategories = new Set(['PETA TAGS', 'META TAGS', 'LORE TAGS', 'RELATIONS TAGS']);
     let sidebarCollapsed = false;
     let currentView = 'reader';
+    let hasUnsavedChanges = false;
+    let pendingActionAfterAuth = null;
 
     const categoryColorPalette = [
       { bg: 'bg-purple-950', text: 'text-purple-300', border: 'border-purple-800' },
@@ -196,23 +199,54 @@
       return categoryColorMap[cleanKey];
     }
 
+    function markDirty() {
+      hasUnsavedChanges = true;
+      if (fileContent && fileContent.trim().length > 0) {
+        localStorage.setItem(LOCAL_BACKUP_KEY, fileContent);
+      }
+      const statusText = document.getElementById('statusText');
+      if (statusText && !statusText.innerText.includes('(Unsaved)')) {
+        statusText.innerText += ' (Unsaved)';
+      }
+    }
+
+    function markClean() {
+      hasUnsavedChanges = false;
+      localStorage.removeItem(LOCAL_BACKUP_KEY);
+      updateAuthUI(!!accessToken);
+    }
+
     window.onload = function () {
+      // Restore any unsaved local backup immediately if present
+      const savedBackup = localStorage.getItem(LOCAL_BACKUP_KEY);
+      if (savedBackup && savedBackup.trim().length > 0) {
+        fileContent = savedBackup;
+        document.getElementById('rawTextArea').value = fileContent;
+        parseLoreContent(fileContent);
+        hasUnsavedChanges = true;
+      }
       initGoogleDriveSDK();
       setupKeyboardShortcuts();
     };
 
+    window.addEventListener('beforeunload', function (e) {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+
     window.addEventListener('pageshow', function (event) {
       if (event.persisted) {
         window.dispatchEvent(new Event('resize'));
-        if (accessToken && parsedEntries.length === 0) {
-          fetchDriveFile();
+        if (accessToken && parsedEntries.length === 0 && !hasUnsavedChanges) {
+          fetchDriveFile(true);
         }
       }
     });
 
     let touchStartX = 0;
     let touchCurrentX = 0;
-    const sidebar = document.getElementById('sidebar');
 
     document.addEventListener('touchstart', (e) => {
       touchStartX = e.touches[0].clientX;
@@ -242,19 +276,33 @@
             callback: (response) => {
               if (response.error !== undefined) {
                 console.error(response);
+                updateAuthUI(false);
                 return;
               }
               accessToken = response.access_token;
               localStorage.setItem('google_access_token', accessToken);
               updateAuthUI(true);
-              fetchDriveFile();
+
+              // Resume the exact action that triggered re-auth (e.g., Save) without overwriting local work
+              if (pendingActionAfterAuth === 'save') {
+                pendingActionAfterAuth = null;
+                saveDriveFile(true);
+              } else if (pendingActionAfterAuth === 'fetch') {
+                pendingActionAfterAuth = null;
+                fetchDriveFile(true);
+              } else if (!hasUnsavedChanges && parsedEntries.length === 0) {
+                fetchDriveFile(true);
+              }
             },
           });
 
           if (accessToken) {
             updateAuthUI(true);
-            fetchDriveFile();
-          } else {
+            if (!hasUnsavedChanges && parsedEntries.length === 0) {
+              fetchDriveFile(true);
+            }
+          } else if (!hasUnsavedChanges) {
+            pendingActionAfterAuth = 'fetch';
             tokenClient.requestAccessToken({ prompt: '' });
           }
         } catch (err) {
@@ -267,37 +315,45 @@
       const statusDot = document.getElementById('driveStatus');
       const authBtn = document.getElementById('authBtn');
       const statusText = document.getElementById('statusText');
+      const unsavedTag = hasUnsavedChanges ? ' (Unsaved)' : '';
 
       if (isConnected) {
         statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50 flex-shrink-0';
         authBtn.innerText = '✓ Drive Connected';
         authBtn.className = 'w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5';
-        statusText.innerText = 'Drive Connected';
+        statusText.innerText = 'Drive Connected' + unsavedTag;
       } else {
         statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0';
-        authBtn.innerText = 'Connect Google Drive';
+        authBtn.innerText = 'Reconnect Drive';
         authBtn.className = 'w-full py-2 px-3 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5';
-        statusText.innerText = 'Drive Disconnected';
+        statusText.innerText = 'Drive Desynced' + unsavedTag;
       }
     }
 
     function handleAuthClick() {
-      if (accessToken) {
-        fetchDriveFile();
-        return;
-      }
       if (tokenClient) {
-        tokenClient.requestAccessToken({ prompt: 'select_account' });
+        // Reconnects Drive WITHOUT wiping or fetching over unsaved work
+        pendingActionAfterAuth = null;
+        tokenClient.requestAccessToken({ prompt: '' });
       } else {
         alert('Google SDK not fully loaded yet. Please refresh.');
       }
     }
 
-    async function fetchDriveFile() {
+    async function fetchDriveFile(skipConfirm = false) {
+      if (hasUnsavedChanges && !skipConfirm) {
+        const proceed = confirm(
+          'You have unsaved changes! Fetching from Drive will overwrite your new additions.\n\nClick Cancel to keep your changes and click Save Drive instead.'
+        );
+        if (!proceed) return;
+      }
+
       if (!accessToken) {
-        handleAuthClick();
+        pendingActionAfterAuth = 'fetch';
+        if (tokenClient) tokenClient.requestAccessToken({ prompt: '' });
         return;
       }
+
       try {
         let res = await fetch(`https://www.googleapis.com/drive/v3/files/${DRIVE_FILE_ID}?alt=media`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -306,33 +362,60 @@
           localStorage.removeItem('google_access_token');
           accessToken = null;
           updateAuthUI(false);
-          tokenClient.requestAccessToken({ prompt: '' });
+          pendingActionAfterAuth = 'fetch';
+          if (tokenClient) tokenClient.requestAccessToken({ prompt: '' });
           return;
         }
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        fileContent = await res.text();
+        
+        const fetchedText = await res.text();
+        if (!fetchedText || fetchedText.trim().length === 0) {
+          alert('Warning: Drive returned an empty file. Local state preserved.');
+          return;
+        }
+
+        fileContent = fetchedText;
         document.getElementById('rawTextArea').value = fileContent;
         parseLoreContent(fileContent);
+        markClean();
         
         if (!sidebarCollapsed) {
           toggleSidebar();
         }
       } catch (err) {
         console.error(err);
-        alert('Fetch Error: Could not fetch file content. Click Fetch Drive to retry.');
+        alert('Fetch Error: Could not fetch file content.');
       }
     }
 
-    async function saveDriveFile() {
+    async function saveDriveFile(isRetryAfterAuth = false) {
+      // 1. Sync current view state into fileContent first
       if (currentView === 'txt') {
         fileContent = document.getElementById('rawTextArea').value;
-      } else {
-        serializeAndSync();
+      } else if (parsedEntries.length > 0) {
+        serializeAndSync(false);
       }
-      if (!accessToken) {
-        alert('Please connect Google Drive first.');
+
+      // 2. Hard guard: NEVER push an empty or wiped payload to Drive
+      if (!fileContent || fileContent.trim().length === 0 || parsedEntries.length === 0 && currentView !== 'txt') {
+        alert('Save Blocked: Content is empty. Aborting upload to prevent wiping your Drive file.');
         return;
       }
+
+      // Always keep a local safety copy before attempting network push
+      localStorage.setItem(LOCAL_BACKUP_KEY, fileContent);
+
+      // 3. If token is missing or expired, silently refresh token and auto-resume Save
+      if (!accessToken) {
+        pendingActionAfterAuth = 'save';
+        if (tokenClient) {
+          tokenClient.requestAccessToken({ prompt: '' });
+        } else {
+          alert('Google SDK not ready. Your work is safely backed up locally—try saving again in a moment.');
+        }
+        return;
+      }
+
       try {
         let res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${DRIVE_FILE_ID}?uploadType=media`, {
           method: 'PATCH',
@@ -342,11 +425,29 @@
           },
           body: fileContent
         });
+
+        // 4. Catch 401 token desync during save, refresh token, and auto-retry push
+        if (res.status === 401) {
+          localStorage.removeItem('google_access_token');
+          accessToken = null;
+          updateAuthUI(false);
+          if (!isRetryAfterAuth && tokenClient) {
+            pendingActionAfterAuth = 'save';
+            tokenClient.requestAccessToken({ prompt: '' });
+          } else {
+            alert('Session expired. Click "Save Drive" again after selecting your account—your local edits are safe.');
+          }
+          return;
+        }
+
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        
+        markClean();
         alert('File saved successfully to Google Drive!');
       } catch (err) {
         console.error(err);
-        alert('Save Error: Could not save file content.');
+        updateAuthUI(false);
+        alert('Network/Save Error: Could not reach Drive, but your edits are preserved locally. Click Save Drive to retry.');
       }
     }
 
@@ -355,9 +456,12 @@
       if (!file) return;
       const reader = new FileReader();
       reader.onload = function(e) {
-        fileContent = e.target.result;
+        const text = e.target.result;
+        if (!text || text.trim().length === 0) return;
+        fileContent = text;
         document.getElementById('rawTextArea').value = fileContent;
         parseLoreContent(fileContent);
+        markDirty();
         if (!sidebarCollapsed) toggleSidebar();
       };
       reader.readAsText(file);
@@ -378,6 +482,11 @@
     }
 
     function switchView(viewName) {
+      // Flush active editor focus so onblur fires before switching tabs
+      if (document.activeElement && document.activeElement.getAttribute('contenteditable') === 'true') {
+        document.activeElement.blur();
+      }
+
       currentView = viewName;
       const readerTab = document.getElementById('readerTabBtn');
       const editorTab = document.getElementById('editorTabBtn');
@@ -390,7 +499,7 @@
       txtTab.className = viewName === 'txt' ? 'px-3 py-1 text-xs font-bold rounded-md bg-blue-600 text-white transition shadow-sm' : 'px-3 py-1 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition';
 
       if (viewName === 'txt') {
-        serializeAndSync();
+        if (parsedEntries.length > 0) serializeAndSync(false);
         readerView.classList.add('hidden');
         txtView.classList.remove('hidden');
         document.getElementById('rawTextArea').value = fileContent;
@@ -408,6 +517,7 @@
     function handleRawTxtInput() {
       fileContent = document.getElementById('rawTextArea').value;
       parseLoreContent(fileContent, false);
+      markDirty();
     }
 
     function escapeHtml(str) {
@@ -424,6 +534,8 @@
     }
 
     function parseLoreContent(text, updateTextArea = true) {
+      if (!text || text.trim().length === 0) return;
+
       const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
       parsedEntries = [];
@@ -528,7 +640,10 @@
       }
     }
 
-    function serializeAndSync() {
+    function serializeAndSync(setDirtyFlag = true) {
+      // Prevent serializing empty state over valid content
+      if (parsedEntries.length === 0 && !masterIndexEntry && !masterTagListEntry) return;
+
       if (masterTagListEntry) {
         let tagBody = masterTagListEntry.body;
         for (const [cat, subtags] of Object.entries(categoryToSubtagsMap)) {
@@ -544,7 +659,10 @@
         masterTagListEntry.body = tagBody.trim();
       }
 
-      const indexBody = masterIndexEntry ? masterIndexEntry.body : '[INDEX]';
+      const sortedTitles = parsedEntries.map(e => e.title);
+      const indexBody = `[INDEX]\n` + sortedTitles.join('\n');
+      if (masterIndexEntry) masterIndexEntry.body = indexBody;
+
       const tagBody = masterTagListEntry ? masterTagListEntry.body : '';
 
       let entryBlocks = parsedEntries.map(e => {
@@ -555,9 +673,13 @@
         return `====================================================================\nENTRY: ${e.title}\n[Last Edited: ${e.lastEdited}]\n${tagLines}\n====================================================================\n\n${e.body}`;
       });
 
-      fileContent = `${indexBody}\n\n====================================================================\nTHE MASTER TAG LIST\n\n${tagBody}\n\n${entryBlocks.join('\n\n')}\n`;
-      const rawTextArea = document.getElementById('rawTextArea');
-      if (rawTextArea) rawTextArea.value = fileContent;
+      const rebuilt = `${indexBody}\n\n====================================================================\nTHE MASTER TAG LIST\n\n${tagBody}\n\n${entryBlocks.join('\n\n')}\n`;
+      if (rebuilt.trim().length > 0) {
+        fileContent = rebuilt;
+        const rawTextArea = document.getElementById('rawTextArea');
+        if (rawTextArea) rawTextArea.value = fileContent;
+        if (setDirtyFlag) markDirty();
+      }
       renderSidebarList(parsedEntries);
     }
 
@@ -566,7 +688,7 @@
       if (entry && entry.title !== newTitle.trim()) {
         entry.title = newTitle.trim();
         entry.lastEdited = new Date().toISOString().split('T')[0];
-        serializeAndSync();
+        serializeAndSync(true);
       }
     }
 
@@ -575,7 +697,7 @@
       if (entry && entry.body !== newBodyHtml.trim()) {
         entry.body = newBodyHtml.trim();
         entry.lastEdited = new Date().toISOString().split('T')[0];
-        serializeAndSync();
+        serializeAndSync(true);
       }
     }
 
@@ -583,9 +705,11 @@
       if (type === 'index' && masterIndexEntry) masterIndexEntry.body = newBody.trim();
       else if (type === 'tags' && masterTagListEntry) {
         masterTagListEntry.body = newBody.trim();
+        serializeAndSync(true);
         parseLoreContent(fileContent, false);
+        return;
       }
-      serializeAndSync();
+      serializeAndSync(true);
     }
 
     function formatText(command, value = null) {
@@ -595,7 +719,10 @@
     function setupKeyboardShortcuts() {
       document.addEventListener('keydown', function(e) {
         if (e.ctrlKey || e.metaKey) {
-          if (e.key === 'b' || e.key === 'i' || e.key === 'u') {
+          if (e.key === 's') {
+            e.preventDefault();
+            saveDriveFile();
+          } else if (e.key === 'b' || e.key === 'i' || e.key === 'u') {
             const activeEl = document.activeElement;
             if (activeEl && activeEl.getAttribute('contenteditable') === 'true') {
               e.preventDefault();
@@ -702,7 +829,7 @@
 
         entry.lastEdited = new Date().toISOString().split('T')[0];
         
-        serializeAndSync();
+        serializeAndSync(true);
         showFullDocument();
       });
 
@@ -717,7 +844,7 @@
       if (entry.dynamicTags[category].length === 0) delete entry.dynamicTags[category];
       entry.lastEdited = new Date().toISOString().split('T')[0];
 
-      serializeAndSync();
+      serializeAndSync(true);
       showFullDocument();
     }
 
@@ -866,14 +993,14 @@
         lastEdited: today,
         raw: ""
       };
-      parsedEntries.push(newEntry);
-      serializeAndSync();
+      parsedEntries.unshift(newEntry);
+      serializeAndSync(true);
       switchView('editor');
       scrollToEntry(newEntry.id);
     }
 
     function copyRawText() {
-      serializeAndSync();
+      if (parsedEntries.length > 0) serializeAndSync(false);
       const rawTextArea = document.getElementById('rawTextArea');
       rawTextArea.select();
       navigator.clipboard.writeText(rawTextArea.value).then(() => {
