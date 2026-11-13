@@ -51,7 +51,7 @@
       <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-shrink-0">
         <div class="overflow-hidden">
           <h1 class="text-xs md:text-sm font-black tracking-widest text-emerald-400 whitespace-nowrap">LORE INDEXOR</h1>
-          <p class="text-[9px] text-slate-400 tracking-wider whitespace-nowrap">Master Archive v4.9</p>
+          <p class="text-[9px] text-slate-400 tracking-wider whitespace-nowrap">Master Archive v5.0</p>
         </div>
         <button onclick="toggleSidebar()" class="p-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 text-xs transition shadow-sm" title="Collapse Sidebar">
           <span class="font-bold">◀</span>
@@ -158,7 +158,7 @@
     </div>
   </div>
 
-<!-- Script Logic -->
+  <!-- Script Logic -->
   <script>
     const CLIENT_ID = typeof CONFIG !== 'undefined' ? CONFIG.CLIENT_ID : '';
     const DRIVE_FILE_ID = typeof CONFIG !== 'undefined' ? CONFIG.DRIVE_FILE_ID : '';
@@ -198,6 +198,7 @@
 
     window.onload = function () {
       initGoogleDriveSDK();
+      setupKeyboardShortcuts();
     };
 
     window.addEventListener('pageshow', function (event) {
@@ -422,7 +423,6 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
-    // Strict non-destructive parser ignoring bracketed descriptions
     function parseLoreContent(text, updateTextArea = true) {
       const rawEntryBlocks = text.split(/(?=ENTRY:\s*)/i);
       
@@ -434,13 +434,11 @@
       allExistingCategories.add('LORE TAGS');
       allExistingCategories.add('RELATIONS TAGS');
 
-      // 1. Capture exact Master Index section
       const parts = text.split(/={10,}/);
       if (parts.length > 0) {
         masterIndexEntry = { id: 'index', title: 'THE MASTER LORE INDEX', body: parts[0].trim(), lastEdited: 'Archive' };
       }
 
-      // 2. Capture Master Tag List and map subtags cleanly (ignoring descriptions containing brackets like [...])
       const tagPart = parts.find(p => p.toUpperCase().includes('MASTER TAG LIST'));
       if (tagPart) {
         masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: tagPart.replace(/THE MASTER TAG LIST/i, '').trim(), lastEdited: 'Archive' };
@@ -459,7 +457,6 @@
               if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
             }
           } else if (lt && !lt.startsWith('[') && !lt.includes('[')) {
-            // Valid subtag line without any brackets or descriptions
             if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
             if (!categoryToSubtagsMap[currentCat].includes(lt)) {
               categoryToSubtagsMap[currentCat].push(lt);
@@ -471,7 +468,6 @@
         masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: '[PETA TAGS]\nPlaces\n\n[META TAGS]\nOriginal\nFan-Fiction', lastEdited: 'Archive' };
       }
 
-      // 3. Parse individual entry cards
       rawEntryBlocks.forEach((block) => {
         const trimmed = block.trim();
         if (!trimmed || !trimmed.toUpperCase().startsWith('ENTRY:')) return;
@@ -520,7 +516,6 @@
         parsedEntries.push({ id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block });
       });
 
-      // Sort entries descending by Last Edited date (newest first)
       parsedEntries.sort((a, b) => new Date(b.lastEdited) - new Date(a.lastEdited));
 
       if (updateTextArea) {
@@ -534,16 +529,13 @@
     }
 
     function serializeAndSync() {
-      // Automatically ensure newly created tags are appended to the Master Tag List card body text
       if (masterTagListEntry) {
         let tagBody = masterTagListEntry.body;
         for (const [cat, subtags] of Object.entries(categoryToSubtagsMap)) {
           const catHeader = `[${cat}]`;
           if (tagBody.includes(catHeader)) {
-            // Find existing section and ensure subtags are present
             subtags.forEach(sub => {
               if (!tagBody.includes(sub)) {
-                // Append under category header if missing
                 tagBody = tagBody.replace(catHeader, `${catHeader}\n${sub}`);
               }
             });
@@ -591,9 +583,29 @@
       if (type === 'index' && masterIndexEntry) masterIndexEntry.body = newBody.trim();
       else if (type === 'tags' && masterTagListEntry) {
         masterTagListEntry.body = newBody.trim();
-        parseLoreContent(fileContent, false); // Re-parse tags map on edit
+        parseLoreContent(fileContent, false);
       }
       serializeAndSync();
+    }
+
+    function formatText(command, value = null) {
+      document.execCommand(command, false, value);
+    }
+
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key === 'b' || e.key === 'i' || e.key === 'u') {
+            const activeEl = document.activeElement;
+            if (activeEl && activeEl.getAttribute('contenteditable') === 'true') {
+              e.preventDefault();
+              if (e.key === 'b') formatText('bold');
+              if (e.key === 'i') formatText('italic');
+              if (e.key === 'u') formatText('underline');
+            }
+          }
+        }
+      });
     }
 
     function renderProcessedBody(bodyText) {
@@ -713,10 +725,11 @@
       const isEditable = currentView === 'editor';
       const isIndex = card.id === 'index';
       
-      let cardBodyContent = card.body;
+      let cardBodyHtml = escapeHtml(card.body);
       if (isIndex) {
+        // Render Master Lore Index dynamically with clickable quick links
         const sortedTitles = parsedEntries.map(e => e.title);
-        cardBodyContent = `[INDEX]\n` + sortedTitles.join('\n');
+        cardBodyHtml = `[INDEX]\n` + sortedTitles.map(t => `<span class="lore-link" onclick="scrollToEntryTitle('${escapeQuotes(t)}')">${escapeHtml(t)}</span>`).join('\n');
       }
 
       return `
@@ -727,7 +740,7 @@
               <span class="text-xs font-mono text-slate-400">${card.lastEdited}</span>
             </div>
           </div>
-          <div ${isEditable ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${escapeHtml(cardBodyContent)}</div>
+          <div ${isEditable && !isIndex ? `contenteditable="true" onblur="updateSpecialCardBody('${card.id}', this.innerText)"` : ''} class="text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${cardBodyHtml}</div>
         </article>
       `;
     }
@@ -753,6 +766,17 @@
         });
       }
 
+      const formattingToolbar = isEditable ? `
+        <div class="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 w-fit text-[11px] mb-2 select-none">
+          <button type="button" onclick="formatText('bold')" class="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold rounded" title="Bold (Ctrl+B)">B</button>
+          <button type="button" onclick="formatText('italic')" class="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 italic rounded" title="Italic (Ctrl+I)">I</button>
+          <button type="button" onclick="formatText('underline')" class="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 underline rounded" title="Underline (Ctrl+U)">U</button>
+          <button type="button" onclick="formatText('strikeThrough')" class="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 line-through rounded" title="Strikethrough">S</button>
+          <span class="w-[1px] h-4 bg-slate-800 mx-0.5"></span>
+          <button type="button" onclick="formatText('insertUnorderedList')" class="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded" title="Bullet List">• List</button>
+        </div>
+      ` : '';
+
       return `
         <article id="entry-${entry.id}" class="bg-slate-900/85 border border-slate-800 rounded-xl p-6 shadow-md space-y-4 hover:border-emerald-500/40 transition">
           <div class="flex flex-wrap gap-1.5 items-center">
@@ -772,7 +796,10 @@
             </div>
           </div>
           
-          <div ${isEditable ? `contenteditable="true" onblur="updateEntryBody(${entry.id}, this.innerText)"` : ''} class="text-xs text-slate-300 font-sans leading-relaxed whitespace-pre-wrap outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${isEditable ? escapeHtml(entry.body) : renderProcessedBody(entry.body)}</div>
+          <div>
+            ${formattingToolbar}
+            <div ${isEditable ? `contenteditable="true" onblur="updateEntryBody(${entry.id}, this.innerHTML)"` : ''} class="text-xs text-slate-300 font-sans leading-relaxed outline-none focus:ring-1 focus:ring-emerald-500 rounded p-1 transition">${isEditable ? entry.body : renderProcessedBody(entry.body)}</div>
+          </div>
         </article>
       `;
     }
@@ -855,5 +882,3 @@
       });
     }
   </script>
-</body>
-</html>
