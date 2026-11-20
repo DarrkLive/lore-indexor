@@ -43,24 +43,61 @@
       background-color: #050608;
     }
 
-    .rainbow-border {
-      border-image: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #6366f1, #ec4899) 1;
-    }
-
-    .rainbow-text {
+    /* RAINBOW MODE (Default) */
+    body.theme-rainbow .rainbow-text {
       background: linear-gradient(90deg, #ff595e, #ff924c, #ffca3a, #8ac926, #1982c4, #6a4c93, #f15bb5);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
     }
 
-    .rainbow-bar {
+    body.theme-rainbow .rainbow-bar {
       background: linear-gradient(90deg, #ef4444, #f97316, #eab308, #22c55e, #06b6d4, #6366f1, #ec4899);
+    }
+
+    body.theme-rainbow .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #ef4444, #eab308, #22c55e, #06b6d4, #ec4899);
+      border-radius: 9999px;
+    }
+
+    /* DARRKM MODE (Grey, Charcoal & Pitch-Black Accents) */
+    body.theme-darrk .rainbow-text {
+      background: linear-gradient(90deg, #f4f4f5, #a1a1aa, #71717a, #d4d4d8);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    body.theme-darrk .rainbow-bar {
+      background: linear-gradient(90deg, #18181b, #52525b, #27272a, #71717a, #18181b);
+    }
+
+    body.theme-darrk aside,
+    body.theme-darrk header,
+    body.theme-darrk footer {
+      background-color: #09090b !important;
+      border-color: #27272a !important;
+    }
+
+    body.theme-darrk main,
+    body.theme-darrk #contentScrollArea {
+      background-color: #040406 !important;
+    }
+
+    body.theme-darrk article,
+    body.theme-darrk #addCardView > div,
+    body.theme-darrk #customModal > div {
+      background-color: #0e0e11 !important;
+      border-color: #27272a !important;
+    }
+
+    body.theme-darrk .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border-radius: 9999px;
     }
 
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: #07080c; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #ef4444, #eab308, #22c55e, #06b6d4, #ec4899); border-radius: 9999px; }
     
     aside { 
       transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
@@ -81,107 +118,119 @@
       text-decoration-color: #4ade80;
     }
 
-    /* Scalable workspace container */
-    #zoomRoot {
+    body.theme-darrk .lore-link {
+      color: #e4e4e7;
+      text-decoration-color: #71717a;
+    }
+    body.theme-darrk .lore-link:hover {
+      color: #ffffff;
+      text-decoration-color: #a1a1aa;
+    }
+
+    /* Zoom applies ONLY to the inner content stage, never header or sidebar */
+    #zoomStage {
       transform: scale(var(--app-zoom));
-      transform-origin: top left;
+      transform-origin: top center;
       width: calc(100% / var(--app-zoom));
-      height: calc(100% / var(--app-zoom));
+      min-height: calc(100% / var(--app-zoom));
     }
   </style>
 </head>
-<body class="bg-[#050608] text-neutral-100 h-[100dvh] w-screen flex flex-col selection:bg-pink-500 selection:text-black overflow-hidden relative">
+<body class="theme-rainbow bg-[#050608] text-neutral-100 h-[100dvh] w-screen flex flex-col selection:bg-pink-500 selection:text-black overflow-hidden relative">
 
-  <!-- Top Rainbow Accent Line -->
+  <!-- Top Rainbow/Darrk Accent Line (unaffected by zoom) -->
   <div class="h-1 w-full rainbow-bar flex-shrink-0 z-40"></div>
 
-  <div id="zoomRoot" class="flex flex-col flex-1 min-h-0 overflow-hidden">
-    <!-- Main App Layout -->
-    <div class="flex flex-1 min-h-0 w-full overflow-hidden relative">
-      
-      <!-- Sidebar (Dark Charcoal/Black with Rainbow Accents) -->
-      <aside id="sidebar" class="bg-[#0c0e13] border-r border-neutral-800 flex flex-col p-4 gap-3 select-none z-20 h-full flex-shrink-0 relative shadow-2xl shadow-black">
-        <!-- Header & Collapse Toggle -->
-        <div class="flex items-center justify-between border-b border-neutral-800 pb-3 flex-shrink-0">
-          <div class="overflow-hidden">
-            <h1 class="text-xs md:text-sm font-black tracking-widest rainbow-text whitespace-nowrap">LORE INDEXOR</h1>
-            <p class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.3 • Rainbow Dark</p>
-          </div>
-          <button onclick="toggleSidebar()" class="p-2 bg-neutral-900 hover:bg-neutral-800 rounded text-amber-300 hover:text-pink-300 text-xs transition shadow-sm border border-neutral-700" title="Collapse Sidebar">
-            <span class="font-bold">◀</span>
+  <!-- Main App Layout -->
+  <div class="flex flex-1 min-h-0 w-full overflow-hidden relative">
+    
+    <!-- Sidebar (fixed header + scrollable inner section, unaffected by zoom) -->
+    <aside id="sidebar" class="bg-[#0c0e13] border-r border-neutral-800 flex flex-col p-4 gap-3 select-none z-20 h-full flex-shrink-0 relative shadow-2xl shadow-black overflow-hidden">
+      <!-- Pinned Sidebar Header -->
+      <div class="flex items-center justify-between border-b border-neutral-800 pb-3 flex-shrink-0 bg-inherit z-10">
+        <div class="overflow-hidden">
+          <h1 class="text-xs md:text-sm font-black tracking-widest rainbow-text whitespace-nowrap">LORE INDEXOR</h1>
+          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.4 • Rainbow</p>
+        </div>
+        <button onclick="toggleSidebar()" class="p-2 bg-neutral-900 hover:bg-neutral-800 rounded text-amber-300 hover:text-pink-300 text-xs transition shadow-sm border border-neutral-700" title="Collapse Sidebar">
+          <span class="font-bold">◀</span>
+        </button>
+      </div>
+
+      <!-- Scrollable Sidebar Body -->
+      <div class="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 text-xs custom-scrollbar min-h-0">
+        
+        <!-- Drive Auth & Sync Controls -->
+        <div class="flex flex-col gap-2 bg-[#07080b] p-2.5 rounded-lg border border-neutral-800">
+          <button id="authBtn" onclick="handleAuthClick()" class="w-full py-2 px-3 bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 hover:brightness-110 text-neutral-950 font-black rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap">
+            <span>Connect Google Drive</span>
           </button>
+          <div class="flex gap-1.5">
+            <button onclick="fetchDriveFile()" class="flex-1 py-1 px-2 bg-neutral-900 hover:bg-neutral-800 text-[11px] font-semibold rounded border border-cyan-500/40 text-cyan-300 transition">
+              Fetch Drive
+            </button>
+            <button onclick="saveDriveFile()" class="flex-1 py-1 px-2 bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 hover:brightness-110 text-white text-[11px] font-bold rounded transition shadow-sm">
+              Save Drive
+            </button>
+          </div>
+          <div class="flex items-center gap-2 mt-0.5 px-1">
+            <div id="driveStatus" class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0" title="Disconnected"></div>
+            <span id="statusText" class="text-[11px] text-neutral-300 truncate">Drive Disconnected</span>
+          </div>
         </div>
 
-        <!-- Sidebar Content Container -->
-        <div class="flex-1 overflow-y-auto flex flex-col gap-3 pr-1 text-xs custom-scrollbar min-h-0">
-          
-          <!-- Drive Auth & Sync Controls -->
-          <div class="flex flex-col gap-2 bg-[#07080b] p-2.5 rounded-lg border border-neutral-800">
-            <button id="authBtn" onclick="handleAuthClick()" class="w-full py-2 px-3 bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 hover:brightness-110 text-neutral-950 font-black rounded text-xs transition shadow-sm flex items-center justify-center gap-1.5 whitespace-nowrap">
-              <span>Connect Google Drive</span>
-            </button>
-            <div class="flex gap-1.5">
-              <button onclick="fetchDriveFile()" class="flex-1 py-1 px-2 bg-neutral-900 hover:bg-neutral-800 text-[11px] font-semibold rounded border border-cyan-500/40 text-cyan-300 transition">
-                Fetch Drive
-              </button>
-              <button onclick="saveDriveFile()" class="flex-1 py-1 px-2 bg-gradient-to-r from-cyan-500 via-indigo-500 to-fuchsia-500 hover:brightness-110 text-white text-[11px] font-bold rounded transition shadow-sm">
-                Save Drive
-              </button>
-            </div>
-            <div class="flex items-center gap-2 mt-0.5 px-1">
-              <div id="driveStatus" class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0" title="Disconnected"></div>
-              <span id="statusText" class="text-[11px] text-neutral-300 truncate">Drive Disconnected</span>
-            </div>
-          </div>
-
-          <!-- Search Filter -->
-          <div class="relative">
-            <input type="text" id="searchInput" placeholder="Search entries, tags..." oninput="filterEntries()" class="w-full bg-[#07080b] border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-pink-400 transition">
-          </div>
-
-          <!-- Index List -->
-          <div class="flex-1 min-h-0 flex flex-col">
-            <div class="flex items-center justify-between mb-1.5 flex-shrink-0">
-              <span class="text-[10px] rainbow-text uppercase tracking-widest font-extrabold">Lore Index</span>
-              <button onclick="scrollToCard('index')" class="text-[10px] text-emerald-400 hover:text-amber-300 hover:underline">Top of Archive</button>
-            </div>
-            <div id="indexList" class="text-neutral-400 italic text-xs space-y-0.5 overflow-y-auto flex-1 custom-scrollbar">No file loaded...</div>
-          </div>
-
-          <!-- Quick Jump to Add Card Tab -->
-          <button onclick="switchView('addCard')" class="w-full py-2 bg-gradient-to-r from-red-500 via-amber-400 via-emerald-400 via-cyan-400 to-fuchsia-500 hover:brightness-110 text-neutral-950 font-black rounded text-xs transition shadow-md mt-2 flex-shrink-0">
-            + Open Add Card Tab
-          </button>
+        <!-- Search Filter -->
+        <div class="relative">
+          <input type="text" id="searchInput" placeholder="Search entries, tags..." oninput="filterEntries()" class="w-full bg-[#07080b] border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-pink-400 transition">
         </div>
-      </aside>
 
-      <!-- Content Workspace -->
-      <main class="flex-1 flex flex-col bg-[#06070a] overflow-hidden h-full">
-        <!-- View Toggle Bar -->
-        <header class="bg-[#0c0e13] border-b border-neutral-800 px-4 md:px-6 py-2.5 flex items-center justify-between select-none flex-shrink-0 gap-2">
-          <div class="flex items-center gap-2 overflow-x-auto">
-            <button onclick="toggleSidebar()" id="expandBtn" class="p-1.5 bg-neutral-900 hover:bg-neutral-800 text-amber-300 hover:text-pink-300 rounded-md transition hidden shadow-sm flex-shrink-0 border border-neutral-700" title="Expand Sidebar">
-              ▶
-            </button>
-            <!-- 4-Tab View Switcher -->
-            <div class="flex gap-1 bg-[#06070a] p-1 rounded-lg border border-neutral-800 flex-shrink-0">
-              <button id="readerTabBtn" onclick="switchView('reader')" class="px-3 py-1 text-xs font-bold rounded-md bg-gradient-to-r from-cyan-400 to-blue-500 text-neutral-950 transition shadow-sm">View</button>
-              <button id="editorTabBtn" onclick="switchView('editor')" class="px-3 py-1 text-xs font-semibold rounded-md text-neutral-300 hover:text-amber-300 transition">Editor</button>
-              <button id="addCardTabBtn" onclick="switchView('addCard')" class="px-3 py-1 text-xs font-semibold rounded-md text-neutral-300 hover:text-emerald-300 transition">+ Add Card</button>
-              <button id="txtTabBtn" onclick="switchView('txt')" class="px-3 py-1 text-xs font-semibold rounded-md text-neutral-300 hover:text-fuchsia-300 transition">Txt</button>
-            </div>
+        <!-- Index List -->
+        <div class="flex-1 min-h-0 flex flex-col">
+          <div class="flex items-center justify-between mb-1.5 flex-shrink-0">
+            <span class="text-[10px] rainbow-text uppercase tracking-widest font-extrabold">Lore Index</span>
+            <button onclick="scrollToCard('index')" class="text-[10px] text-emerald-400 hover:text-amber-300 hover:underline">Top of Archive</button>
           </div>
-          <div class="flex gap-2 flex-shrink-0">
-            <label class="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 border border-emerald-500/40 rounded-md text-xs font-medium text-emerald-300 cursor-pointer transition flex items-center gap-1.5">
-              <span>Open Local</span>
-              <input type="file" id="localFileInput" accept=".txt,.md" onchange="handleLocalFileLoad(event)" class="hidden">
-            </label>
-            <button onclick="copyRawText()" class="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 border border-pink-500/40 rounded-md text-xs font-medium text-pink-300 transition">Copy Raw</button>
-          </div>
-        </header>
+          <div id="indexList" class="text-neutral-400 italic text-xs space-y-0.5 overflow-y-auto flex-1 custom-scrollbar">No file loaded...</div>
+        </div>
 
-        <!-- View Containers -->
-        <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0 relative">
+        <!-- Quick Jump to Add Card Tab -->
+        <button onclick="switchView('addCard')" class="w-full py-2 bg-gradient-to-r from-red-500 via-amber-400 via-emerald-400 via-cyan-400 to-fuchsia-500 hover:brightness-110 text-neutral-950 font-black rounded text-xs transition shadow-md mt-2 flex-shrink-0">
+          + Open Add Card Tab
+        </button>
+      </div>
+    </aside>
+
+    <!-- Content Workspace -->
+    <main class="flex-1 flex flex-col bg-[#06070a] overflow-hidden h-full min-w-0">
+      <!-- Top Header Bar (unaffected by zoom) -->
+      <header class="bg-[#0c0e13] border-b border-neutral-800 px-4 md:px-6 py-2.5 flex items-center justify-between select-none flex-shrink-0 gap-2 z-20">
+        <div class="flex items-center gap-2 overflow-x-auto">
+          <button onclick="toggleSidebar()" id="expandBtn" class="p-1.5 bg-neutral-900 hover:bg-neutral-800 text-amber-300 hover:text-pink-300 rounded-md transition hidden shadow-sm flex-shrink-0 border border-neutral-700" title="Expand Sidebar">
+            ▶
+          </button>
+          <!-- 4-Tab View Switcher -->
+          <div class="flex gap-1 bg-[#06070a] p-1 rounded-lg border border-neutral-800 flex-shrink-0">
+            <button id="readerTabBtn" onclick="switchView('reader')" class="px-3 py-1 text-xs font-bold rounded-md bg-gradient-to-r from-cyan-400 to-blue-500 text-neutral-950 transition shadow-sm">View</button>
+            <button id="editorTabBtn" onclick="switchView('editor')" class="px-3 py-1 text-xs font-semibold rounded-md text-neutral-300 hover:text-amber-300 transition">Editor</button>
+            <button id="addCardTabBtn" onclick="switchView('addCard')" class="px-3 py-1 text-xs font-semibold rounded-md text-neutral-300 hover:text-emerald-300 transition">+ Add Card</button>
+            <button id="txtTabBtn" onclick="switchView('txt')" class="px-3 py-1 text-xs font-semibold rounded-md text-neutral-300 hover:text-fuchsia-300 transition">Txt</button>
+          </div>
+        </div>
+        <div class="flex gap-2 flex-shrink-0 items-center">
+          <button type="button" id="themeToggleBtn" onclick="toggleThemeMode()" class="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 border border-amber-400/50 rounded-md text-xs font-bold text-amber-300 transition flex items-center gap-1" title="Toggle between Rainbow and Darrk theme">
+            <span>🌈 Rainbow</span>
+          </button>
+          <label class="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 border border-emerald-500/40 rounded-md text-xs font-medium text-emerald-300 cursor-pointer transition flex items-center gap-1.5">
+            <span>Open Local</span>
+            <input type="file" id="localFileInput" accept=".txt,.md" onchange="handleLocalFileLoad(event)" class="hidden">
+          </label>
+          <button onclick="copyRawText()" class="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 border border-pink-500/40 rounded-md text-xs font-medium text-pink-300 transition">Copy Raw</button>
+        </div>
+      </header>
+
+      <!-- Scrollable Lore Content Area (ONLY this area scales with zoom) -->
+      <div id="contentScrollArea" class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0 relative">
+        <div id="zoomStage">
           <!-- Reader & Card Editor View -->
           <div id="readerView" class="max-w-4xl mx-auto space-y-6 pb-12">
             <div class="text-center text-neutral-400 py-24 border border-dashed border-neutral-700 rounded-2xl bg-[#0c0e13]/70">
@@ -246,29 +295,28 @@
             <textarea id="rawTextArea" oninput="handleRawTxtInput()" class="w-full flex-1 bg-[#06070a] border border-neutral-800 rounded-b-xl p-4 font-mono text-xs text-neutral-200 focus:outline-none focus:border-cyan-400 resize-none leading-relaxed custom-scrollbar min-h-[550px]" placeholder="Raw file content..."></textarea>
           </div>
         </div>
-      </main>
-    </div>
-
-    <!-- Bottom Status Bar with Word Count & Zoom Controls -->
-    <footer id="statusBar" class="bg-[#090b0f] border-t border-neutral-800 px-4 md:px-6 py-1.5 flex items-center justify-between text-[11px] select-none flex-shrink-0 z-30 gap-2">
-      <div class="flex items-center gap-3 min-w-0">
-        <span id="bottomSyncStatus" class="text-cyan-300 font-medium truncate">Ready</span>
       </div>
-      <div class="flex items-center gap-3 flex-shrink-0">
-        <!-- Zoom Controls (Ctrl + / - / 0) -->
-        <div class="flex items-center gap-1 bg-[#050608] px-2 py-0.5 rounded-full border border-neutral-800" title="Zoom: Ctrl + / Ctrl - / Ctrl 0">
-          <button type="button" onclick="adjustZoom(-0.1)" class="px-1.5 font-mono font-bold text-rose-400 hover:text-white transition" title="Zoom Out (Ctrl -)">-</button>
-          <button type="button" onclick="resetZoom()" id="zoomDisplay" class="px-1 font-mono font-bold text-cyan-300 hover:text-amber-300 transition" title="Reset Zoom (Ctrl 0)">100%</button>
-          <button type="button" onclick="adjustZoom(0.1)" class="px-1.5 font-mono font-bold text-emerald-400 hover:text-white transition" title="Zoom In (Ctrl +)">+</button>
-        </div>
-        <span id="wordCountDisplay" class="px-2.5 py-0.5 rounded-full bg-neutral-900 border border-fuchsia-500/40 text-amber-300 font-mono font-bold">Words: 0</span>
-      </div>
-    </footer>
+    </main>
   </div>
+
+  <!-- Bottom Status Bar with Word Count & Zoom Controls (unaffected by zoom) -->
+  <footer id="statusBar" class="bg-[#090b0f] border-t border-neutral-800 px-4 md:px-6 py-1.5 flex items-center justify-between text-[11px] select-none flex-shrink-0 z-30 gap-2">
+    <div class="flex items-center gap-3 min-w-0">
+      <span id="bottomSyncStatus" class="text-cyan-300 font-medium truncate">Ready</span>
+    </div>
+    <div class="flex items-center gap-3 flex-shrink-0">
+      <div class="flex items-center gap-1 bg-[#050608] px-2 py-0.5 rounded-full border border-neutral-800" title="Zoom Lore Content: Ctrl + / Ctrl - / Ctrl 0">
+        <button type="button" onclick="adjustZoom(-0.1)" class="px-1.5 font-mono font-bold text-rose-400 hover:text-white transition" title="Zoom Out (Ctrl -)">-</button>
+        <button type="button" onclick="resetZoom()" id="zoomDisplay" class="px-1 font-mono font-bold text-cyan-300 hover:text-amber-300 transition" title="Reset Zoom (Ctrl 0)">100%</button>
+        <button type="button" onclick="adjustZoom(0.1)" class="px-1.5 font-mono font-bold text-emerald-400 hover:text-white transition" title="Zoom In (Ctrl +)">+</button>
+      </div>
+      <span id="wordCountDisplay" class="px-2.5 py-0.5 rounded-full bg-neutral-900 border border-fuchsia-500/40 text-amber-300 font-mono font-bold">Words: 0</span>
+    </div>
+  </footer>
 
   <!-- Custom In-App Modal Dialog -->
   <div id="customModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-[#0e1118] border border-neutral-700 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+    <div id="customModalCard" class="bg-[#0e1118] border border-neutral-700 rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
       <h3 id="modalTitle" class="text-sm font-bold rainbow-text uppercase tracking-widest">Add Tag</h3>
       <div id="modalBody" class="space-y-3"></div>
       <div class="flex justify-end gap-2 pt-2">
@@ -284,6 +332,7 @@
     const DRIVE_FILE_ID = typeof CONFIG !== 'undefined' ? CONFIG.DRIVE_FILE_ID : '';
     const LOCAL_BACKUP_KEY = 'lore_indexor_unsaved_backup';
     const ZOOM_STORAGE_KEY = 'lore_indexor_zoom_level';
+    const THEME_STORAGE_KEY = 'lore_indexor_theme_mode';
 
     let tokenClient;
     let accessToken = localStorage.getItem('google_access_token') || null;
@@ -299,6 +348,7 @@
     let hasUnsavedChanges = false;
     let pendingActionAfterAuth = null;
     let currentZoom = parseFloat(localStorage.getItem(ZOOM_STORAGE_KEY)) || 1.0;
+    let themeMode = localStorage.getItem(THEME_STORAGE_KEY) || 'rainbow';
 
     const categoryColorPalette = [
       { bg: 'bg-red-950/90', text: 'text-red-300', border: 'border-red-500/60' },
@@ -311,6 +361,26 @@
       { bg: 'bg-pink-950/90', text: 'text-pink-300', border: 'border-pink-400/60' }
     ];
     const categoryColorMap = {};
+
+    function applyThemeMode(mode) {
+      themeMode = mode === 'darrk' ? 'darrk' : 'rainbow';
+      localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+      document.body.classList.remove('theme-rainbow', 'theme-darrk');
+      document.body.classList.add(themeMode === 'darrk' ? 'theme-darrk' : 'theme-rainbow');
+
+      const btn = document.getElementById('themeToggleBtn');
+      const subtitle = document.getElementById('modeSubtitle');
+      if (btn) {
+        btn.innerHTML = themeMode === 'darrk' ? '<span>🌑 Darrk</span>' : '<span>🌈 Rainbow</span>';
+      }
+      if (subtitle) {
+        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.4 • Darrk' : 'Master Archive v5.4 • Rainbow';
+      }
+    }
+
+    function toggleThemeMode() {
+      applyThemeMode(themeMode === 'rainbow' ? 'darrk' : 'rainbow');
+    }
 
     function applyZoom(zoomValue) {
       currentZoom = Math.min(1.5, Math.max(0.5, Math.round(zoomValue * 10) / 10));
@@ -397,6 +467,7 @@
     }
 
     window.onload = function () {
+      applyThemeMode(themeMode);
       applyZoom(currentZoom);
       const savedBackup = localStorage.getItem(LOCAL_BACKUP_KEY);
       if (savedBackup && savedBackup.trim().length > 0) {
@@ -775,6 +846,70 @@
 
     function escapeQuotes(str) {
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    function htmlToPlainTextWithBreaks(htmlStr) {
+      const temp = document.createElement('div');
+      temp.innerHTML = String(htmlStr || '')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<li[^>]*>/gi, '• ');
+      return (temp.textContent || temp.innerText || '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    function formatEntryAsTxt(entry) {
+      const lines = [
+        '====================================================================',
+        `ENTRY: ${entry.title}`,
+        `[Last Edited: ${entry.lastEdited}]`
+      ];
+      for (const [cat, vals] of Object.entries(entry.dynamicTags || {})) {
+        if (vals && vals.length > 0) {
+          lines.push(`[${cat}]: ${vals.join(' | ')}`);
+        }
+      }
+      lines.push('====================================================================');
+      lines.push('');
+      lines.push(htmlToPlainTextWithBreaks(entry.body));
+      return lines.join('\n');
+    }
+
+    function copyEntryCard(entryId) {
+      const entry = parsedEntries.find(e => e.id === entryId);
+      if (!entry) return;
+      const textToCopy = formatEntryAsTxt(entry);
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        alert(`Copied "${entry.title}" (with tags & date) to clipboard!`);
+      }).catch(() => {
+        const helper = document.createElement('textarea');
+        helper.value = textToCopy;
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand('copy');
+        document.body.removeChild(helper);
+        alert(`Copied "${entry.title}" (with tags & date) to clipboard!`);
+      });
+    }
+
+    function downloadEntryCard(entryId) {
+      const entry = parsedEntries.find(e => e.id === entryId);
+      if (!entry) return;
+      const textToExport = formatEntryAsTxt(entry);
+      const safeName = (entry.title || 'lore-entry')
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]+/gi, '_')
+        .replace(/^_+|_+$/g, '') || 'lore-entry';
+      const blob = new Blob([textToExport], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeName}.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     }
 
     function parseLoreContent(text, updateTextArea = true) {
@@ -1157,6 +1292,17 @@
         });
       }
 
+      const cardExportButtons = `
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <button type="button" onclick="copyEntryCard(${entry.id})" class="p-1.5 bg-[#06070a] hover:bg-neutral-800 text-cyan-300 hover:text-amber-300 rounded-md border border-neutral-800 transition" title="Copy Entry, Tags & Date">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+          <button type="button" onclick="downloadEntryCard(${entry.id})" class="p-1.5 bg-[#06070a] hover:bg-neutral-800 text-emerald-300 hover:text-pink-300 rounded-md border border-neutral-800 transition" title="Download Entry as .txt">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </button>
+        </div>
+      `;
+
       const formattingToolbar = isEditable ? `
         <div class="flex items-center gap-1 bg-[#06070a] p-1 rounded-lg border border-neutral-800 w-fit text-[11px] mb-2 select-none">
           <button type="button" onclick="formatText('bold')" class="px-2 py-0.5 bg-neutral-900 hover:bg-neutral-800 text-rose-400 font-bold rounded" title="Bold (Ctrl+B)">B</button>
@@ -1170,9 +1316,12 @@
 
       return `
         <article id="entry-${entry.id}" class="bg-[#0e1118] border border-neutral-800 rounded-xl p-6 shadow-lg space-y-4 hover:border-cyan-400/60 transition">
-          <div class="flex flex-wrap gap-1.5 items-center">
-            ${petaHtml}
-            ${isEditable ? `<button onclick="promptAddTag(${entry.id}, 'PETA TAGS')" class="px-2 py-0.5 bg-neutral-900 hover:bg-fuchsia-500 hover:text-neutral-950 text-fuchsia-300 text-[10px] font-bold rounded-full border border-fuchsia-500/40 transition" title="Add PETA Tag">+ Peta</button>` : ''}
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex flex-wrap gap-1.5 items-center">
+              ${petaHtml}
+              ${isEditable ? `<button onclick="promptAddTag(${entry.id}, 'PETA TAGS')" class="px-2 py-0.5 bg-neutral-900 hover:bg-fuchsia-500 hover:text-neutral-950 text-fuchsia-300 text-[10px] font-bold rounded-full border border-fuchsia-500/40 transition" title="Add PETA Tag">+ Peta</button>` : ''}
+            </div>
+            ${cardExportButtons}
           </div>
 
           <div class="flex flex-col border-b border-neutral-800 pb-3 gap-2.5">
@@ -1258,6 +1407,5 @@
       });
     }
   </script>
-  </div>
 </body>
 </html>
