@@ -150,7 +150,7 @@
       <div class="flex items-center justify-between border-b border-neutral-800 pb-3 flex-shrink-0 bg-inherit z-10">
         <div class="overflow-hidden">
           <h1 class="text-xs md:text-sm font-black tracking-widest rainbow-text whitespace-nowrap">LORE INDEXOR</h1>
-          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.7 • Rainbow</p>
+          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.8 • Rainbow</p>
         </div>
         <button onclick="toggleSidebar()" class="p-2 bg-neutral-900 hover:bg-neutral-800 rounded text-amber-300 hover:text-pink-300 text-xs transition shadow-sm border border-neutral-700" title="Collapse Sidebar">
           <span class="font-bold">◀</span>
@@ -386,7 +386,7 @@
         btn.innerHTML = themeMode === 'darrk' ? '<span>🌑 Darrk</span>' : '<span>🌈 Rainbow</span>';
       }
       if (subtitle) {
-        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.7 • Darrk' : 'Master Archive v5.7 • Rainbow';
+        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.8 • Darrk' : 'Master Archive v5.8 • Rainbow';
       }
     }
 
@@ -836,7 +836,7 @@
       const bodyHtml = document.getElementById('newCardBody').innerHTML.trim();
 
       const title = titleInput || 'New Lore Entry';
-      const body = bodyHtml || '';
+      const body = stripLiteralLoreTagLines(bodyHtml || '');
       const dynamicTags = {};
       if (catInput && subtagVal) {
         dynamicTags[catInput] = [subtagVal];
@@ -880,6 +880,15 @@
       return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
     }
 
+    /* Strip any literal [Lore tag] / [LORE TAGS] / [LORE TAGS]: lines from card body text */
+    function stripLiteralLoreTagLines(bodyStr) {
+      if (!bodyStr) return '';
+      return String(bodyStr)
+        .replace(/(?:^|<br\s*\/?>|\n)\s*\[\s*LORE\s*TAGS?\s*\]\s*:?\s*(?=$|<br\s*\/?>|\n)/gi, '')
+        .replace(/^\s*\[\s*LORE\s*TAGS?\s*\]\s*:?\s*$/gim, '')
+        .trim();
+    }
+
     function htmlToPlainTextWithBreaks(htmlStr) {
       const temp = document.createElement('div');
       temp.innerHTML = String(htmlStr || '')
@@ -905,7 +914,7 @@
       }
       lines.push('====================================================================');
       lines.push('');
-      lines.push(htmlToPlainTextWithBreaks(entry.body));
+      lines.push(htmlToPlainTextWithBreaks(stripLiteralLoreTagLines(entry.body)));
       return lines.join('\n');
     }
 
@@ -958,7 +967,7 @@
       return loreTerms;
     }
 
-    /* Automatically add matching word/phrase subtags from LORE TAGS subgroup to an entry without creating empty tag headers */
+    /* Automatically add matching word/phrase subtags from LORE TAGS subgroup straight into tag bubbles */
     function applyLoreSubgroupAutoTags(entry) {
       const loreTerms = getLoreSubgroupTerms();
       if (!entry || loreTerms.length === 0) return false;
@@ -966,8 +975,12 @@
       const plainBody = htmlToPlainTextWithBreaks(entry.body);
       if (!plainBody) return false;
 
-      const loreCatKey = Object.keys(categoryToSubtagsMap).find(k => k.toUpperCase().includes('LORE')) || 'LORE TAGS';
-      const existingList = (entry.dynamicTags[loreCatKey] || []).slice();
+      // Reuse existing Lore Tags category key on the entry (case-insensitive) so bubbles never duplicate
+      const existingEntryLoreKey = Object.keys(entry.dynamicTags || {}).find(k => k.toUpperCase().includes('LORE'));
+      const masterLoreKey = Object.keys(categoryToSubtagsMap).find(k => k.toUpperCase().includes('LORE')) || 'LORE TAGS';
+      const targetKey = existingEntryLoreKey || masterLoreKey;
+
+      const existingList = (entry.dynamicTags[targetKey] || []).slice();
 
       let addedAny = false;
       loreTerms.forEach(term => {
@@ -980,9 +993,9 @@
       });
 
       if (existingList.length > 0) {
-        entry.dynamicTags[loreCatKey] = existingList;
+        entry.dynamicTags[targetKey] = existingList;
       } else {
-        delete entry.dynamicTags[loreCatKey];
+        delete entry.dynamicTags[targetKey];
       }
 
       return addedAny;
@@ -1235,14 +1248,15 @@
         const bodyLines = lines.filter(l => {
           const lt = l.trim();
           if (lt.includes('====') || lt.includes('----') || lt.toUpperCase().startsWith('ENTRY:') || lt.includes('Last Edited:')) return false;
-          // Strip stray empty [CATEGORY]: lines so they never repeat inside card bodies
+          // Strip stray empty [CATEGORY]: lines and literal [Lore tag] / [LORE TAGS] headers from card bodies
           if (/^\[\s*[A-Z\s_-]+\s*\]\s*:\s*$/i.test(lt)) return false;
+          if (/^\[\s*LORE\s*TAGS?\s*\]\s*:?\s*$/i.test(lt)) return false;
           let match = lt.match(tagLineRegexOutside) || lt.match(tagLineRegexInside);
           if (match && !match[1].toUpperCase().includes('LAST EDITED')) return false;
           return true;
         });
         
-        const body = bodyLines.join('\n').trim();
+        const body = stripLiteralLoreTagLines(bodyLines.join('\n').trim());
         const tags = (block.match(/#[a-zA-Z0-9_-]+/g) || []).map(t => t.substring(1));
 
         const entryObj = { id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block };
@@ -1296,7 +1310,8 @@
             tagLines += `[${cat}]: ${cleanVals.join(' | ')}\n`;
           }
         }
-        return `====================================================================\nENTRY: ${e.title}\n[Last Edited: ${e.lastEdited}]\n${tagLines}\n====================================================================\n\n${e.body}`;
+        const cleanBody = stripLiteralLoreTagLines(e.body);
+        return `====================================================================\nENTRY: ${e.title}\n[Last Edited: ${e.lastEdited}]\n${tagLines}\n====================================================================\n\n${cleanBody}`;
       });
 
       const rebuilt = `${indexBody}\n\n====================================================================\nTHE MASTER TAG LIST\n\n${tagBody}\n\n${entryBlocks.join('\n\n')}\n`;
@@ -1331,7 +1346,7 @@
         span.replaceWith(document.createTextNode(span.textContent));
       });
 
-      const cleanedHtml = temp.innerHTML.trim();
+      const cleanedHtml = stripLiteralLoreTagLines(temp.innerHTML.trim());
       if (entry.body !== cleanedHtml) {
         entry.body = cleanedHtml;
         entry.lastEdited = new Date().toISOString().split('T')[0];
@@ -1397,12 +1412,13 @@
 
     /* Single-pass regex replacement that skips existing HTML tags so nested/substring titles never corrupt attributes */
     function renderProcessedBody(bodyText) {
+      const sanitizedBody = stripLiteralLoreTagLines(bodyText);
       const titles = parsedEntries
         .map(e => (e.title || '').trim())
         .filter(Boolean)
         .sort((a, b) => b.length - a.length);
 
-      if (titles.length === 0) return bodyText;
+      if (titles.length === 0) return sanitizedBody;
 
       const titleLookup = new Map();
       titles.forEach(t => {
@@ -1417,7 +1433,7 @@
 
       const combinedRegex = new RegExp(`(<[^>]+>)|\\b(${escapedTitles.join('|')})\\b`, 'gi');
 
-      return bodyText.replace(combinedRegex, (match, htmlTag, matchedTitle) => {
+      return sanitizedBody.replace(combinedRegex, (match, htmlTag, matchedTitle) => {
         if (htmlTag) return htmlTag;
 
         const canonicalTitle = titleLookup.get(matchedTitle.toLowerCase()) || matchedTitle;
