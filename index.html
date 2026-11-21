@@ -150,7 +150,7 @@
       <div class="flex items-center justify-between border-b border-neutral-800 pb-3 flex-shrink-0 bg-inherit z-10">
         <div class="overflow-hidden">
           <h1 class="text-xs md:text-sm font-black tracking-widest rainbow-text whitespace-nowrap">LORE INDEXOR</h1>
-          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.5 • Rainbow</p>
+          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.6 • Rainbow</p>
         </div>
         <button onclick="toggleSidebar()" class="p-2 bg-neutral-900 hover:bg-neutral-800 rounded text-amber-300 hover:text-pink-300 text-xs transition shadow-sm border border-neutral-700" title="Collapse Sidebar">
           <span class="font-bold">◀</span>
@@ -386,7 +386,7 @@
         btn.innerHTML = themeMode === 'darrk' ? '<span>🌑 Darrk</span>' : '<span>🌈 Rainbow</span>';
       }
       if (subtitle) {
-        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.5 • Darrk' : 'Master Archive v5.5 • Rainbow';
+        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.6 • Darrk' : 'Master Archive v5.6 • Rainbow';
       }
     }
 
@@ -1308,8 +1308,18 @@
 
     function updateEntryBody(id, newBodyHtml) {
       const entry = parsedEntries.find(e => e.id === id);
-      if (entry && entry.body !== newBodyHtml.trim()) {
-        entry.body = newBodyHtml.trim();
+      if (!entry) return;
+
+      // Strip auto-generated lore-link spans before storing body so markup never pollutes raw text
+      const temp = document.createElement('div');
+      temp.innerHTML = newBodyHtml;
+      temp.querySelectorAll('span.lore-link').forEach(span => {
+        span.replaceWith(document.createTextNode(span.textContent));
+      });
+
+      const cleanedHtml = temp.innerHTML.trim();
+      if (entry.body !== cleanedHtml) {
+        entry.body = cleanedHtml;
         entry.lastEdited = new Date().toISOString().split('T')[0];
         applyLoreSubgroupAutoTags(entry);
         serializeAndSync(true);
@@ -1371,18 +1381,34 @@
       });
     }
 
+    /* Single-pass regex replacement that skips existing HTML tags so nested/substring titles never corrupt attributes */
     function renderProcessedBody(bodyText) {
-      let formatted = bodyText;
-      const sortedEntries = [...parsedEntries].sort((a, b) => b.title.length - a.title.length);
-      
-      sortedEntries.forEach(entry => {
-        if (entry.title) {
-          const escapedTitle = entry.title.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-          const regex = new RegExp(`\\b(${escapedTitle})\\b`, 'g');
-          formatted = formatted.replace(regex, `<span class="lore-link" onclick="scrollToEntryTitle('${escapeQuotes(entry.title)}')">$1</span>`);
+      const titles = parsedEntries
+        .map(e => (e.title || '').trim())
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length);
+
+      if (titles.length === 0) return bodyText;
+
+      const titleLookup = new Map();
+      titles.forEach(t => {
+        if (!titleLookup.has(t.toLowerCase())) {
+          titleLookup.set(t.toLowerCase(), t);
         }
       });
-      return formatted;
+
+      const escapedTitles = Array.from(titleLookup.values()).map(t =>
+        t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+      );
+
+      const combinedRegex = new RegExp(`(<[^>]+>)|\\b(${escapedTitles.join('|')})\\b`, 'gi');
+
+      return bodyText.replace(combinedRegex, (match, htmlTag, matchedTitle) => {
+        if (htmlTag) return htmlTag;
+
+        const canonicalTitle = titleLookup.get(matchedTitle.toLowerCase()) || matchedTitle;
+        return `<span class="lore-link" onclick="scrollToEntryTitle('${escapeQuotes(canonicalTitle)}')">${matchedTitle}</span>`;
+      });
     }
 
     function scrollToCard(cardId) {
