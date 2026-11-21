@@ -150,7 +150,7 @@
       <div class="flex items-center justify-between border-b border-neutral-800 pb-3 flex-shrink-0 bg-inherit z-10">
         <div class="overflow-hidden">
           <h1 class="text-xs md:text-sm font-black tracking-widest rainbow-text whitespace-nowrap">LORE INDEXOR</h1>
-          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.4 • Rainbow</p>
+          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.5 • Rainbow</p>
         </div>
         <button onclick="toggleSidebar()" class="p-2 bg-neutral-900 hover:bg-neutral-800 rounded text-amber-300 hover:text-pink-300 text-xs transition shadow-sm border border-neutral-700" title="Collapse Sidebar">
           <span class="font-bold">◀</span>
@@ -184,6 +184,11 @@
           <input type="text" id="searchInput" placeholder="Search entries, tags..." oninput="filterEntries()" class="w-full bg-[#07080b] border border-neutral-800 rounded-md px-3 py-1.5 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-pink-400 transition">
         </div>
 
+        <!-- Bulk Tag Scanner Button -->
+        <button type="button" onclick="runBulkTagScan()" class="w-full py-1.5 px-3 bg-neutral-900 hover:bg-neutral-800 border border-amber-400/50 rounded-md text-[11px] font-bold text-amber-300 transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <span>Scan Bulk: Auto Lore Tags & New Tags</span>
+        </button>
+
         <!-- Index List -->
         <div class="flex-1 min-h-0 flex flex-col">
           <div class="flex items-center justify-between mb-1.5 flex-shrink-0">
@@ -192,11 +197,6 @@
           </div>
           <div id="indexList" class="text-neutral-400 italic text-xs space-y-0.5 overflow-y-auto flex-1 custom-scrollbar">No file loaded...</div>
         </div>
-
-        <!-- Quick Jump to Add Card Tab -->
-        <button onclick="switchView('addCard')" class="w-full py-2 bg-gradient-to-r from-red-500 via-amber-400 via-emerald-400 via-cyan-400 to-fuchsia-500 hover:brightness-110 text-neutral-950 font-black rounded text-xs transition shadow-md mt-2 flex-shrink-0">
-          + Open Add Card Tab
-        </button>
       </div>
     </aside>
 
@@ -228,6 +228,18 @@
         </div>
       </header>
 
+      <!-- Bulk New-Tag Notification Banner (appears when new tags are detected in bulk scan) -->
+      <div id="newTagAlertBanner" class="hidden bg-amber-950/90 border-b border-amber-400/60 px-4 md:px-6 py-2 flex items-center justify-between gap-3 text-xs z-20 flex-shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="px-2 py-0.5 rounded bg-amber-400 text-neutral-950 font-black text-[10px] uppercase flex-shrink-0">New Tags Detected</span>
+          <span id="newTagAlertText" class="text-amber-100 truncate"></span>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button type="button" onclick="openDetectedNewTagsModal()" class="px-3 py-1 bg-emerald-400 hover:brightness-110 text-neutral-950 font-bold rounded text-[11px] transition">Review & Save to File</button>
+          <button type="button" onclick="dismissNewTagBanner()" class="px-2 py-1 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded text-[11px] border border-neutral-700 transition">Dismiss</button>
+        </div>
+      </div>
+
       <!-- Scrollable Lore Content Area (ONLY this area scales with zoom) -->
       <div id="contentScrollArea" class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar min-h-0 relative">
         <div id="zoomStage">
@@ -244,25 +256,24 @@
               <div class="flex items-center justify-between border-b border-neutral-800 pb-3">
                 <div>
                   <h2 class="text-lg font-extrabold rainbow-text">Create New Lore Card</h2>
-                  <p class="text-xs text-neutral-400">Add a card cleanly without cluttering your main reader or editor view.</p>
+                  <p class="text-xs text-neutral-400">Select an existing main tag and existing subtag from your loaded file.</p>
                 </div>
                 <button onclick="switchView('reader')" class="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 text-xs text-neutral-200 rounded-lg border border-neutral-700 transition">Back to View</button>
               </div>
 
               <div class="space-y-1.5">
                 <label for="newCardTitle" class="block text-xs font-bold text-cyan-300 uppercase tracking-wider">Card Title</label>
-                <input type="text" id="newCardTitle" placeholder="e.g. The Syneris, Oakhaven, Loafault..." class="w-full bg-[#06070a] border border-neutral-800 rounded-lg px-3.5 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-400 transition">
+                <input type="text" id="newCardTitle" placeholder="Enter card title..." class="w-full bg-[#06070a] border border-neutral-800 rounded-lg px-3.5 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-400 transition">
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="space-y-1.5">
-                  <label for="newCardCategory" class="block text-xs font-bold text-fuchsia-300 uppercase tracking-wider">Main Tag Category</label>
-                  <input type="text" id="newCardCategory" value="META TAGS" list="newCardCatsList" class="w-full bg-[#06070a] border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:border-fuchsia-400 transition">
-                  <datalist id="newCardCatsList"></datalist>
+                  <label for="newCardCategorySelect" class="block text-xs font-bold text-fuchsia-300 uppercase tracking-wider">Existing Main Tag</label>
+                  <select id="newCardCategorySelect" onchange="syncNewCardSubtagDropdown()" class="w-full bg-[#06070a] border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:border-fuchsia-400 transition"></select>
                 </div>
                 <div class="space-y-1.5">
-                  <label for="newCardSubtags" class="block text-xs font-bold text-amber-300 uppercase tracking-wider">Subtags (comma or | separated)</label>
-                  <input type="text" id="newCardSubtags" placeholder="e.g. Original, WOHOD" class="w-full bg-[#06070a] border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition">
+                  <label for="newCardSubtagSelect" class="block text-xs font-bold text-amber-300 uppercase tracking-wider">Existing Subtag (for selected tag)</label>
+                  <select id="newCardSubtagSelect" class="w-full bg-[#06070a] border border-neutral-800 rounded-lg px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:border-amber-400 transition"></select>
                 </div>
               </div>
 
@@ -342,7 +353,8 @@
     let masterTagListEntry = null;
     let allExistingTags = new Set();
     let categoryToSubtagsMap = {};
-    let allExistingCategories = new Set(['PETA TAGS', 'META TAGS', 'LORE TAGS', 'RELATIONS TAGS']);
+    let allExistingCategories = new Set();
+    let detectedNewTagsQueue = []; // { term, category, entryIds }
     let sidebarCollapsed = false;
     let currentView = 'reader';
     let hasUnsavedChanges = false;
@@ -374,7 +386,7 @@
         btn.innerHTML = themeMode === 'darrk' ? '<span>🌑 Darrk</span>' : '<span>🌈 Rainbow</span>';
       }
       if (subtitle) {
-        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.4 • Darrk' : 'Master Archive v5.4 • Rainbow';
+        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.5 • Darrk' : 'Master Archive v5.5 • Rainbow';
       }
     }
 
@@ -732,10 +744,38 @@
       }
     }
 
-    function populateNewCardCategories() {
-      const datalist = document.getElementById('newCardCatsList');
-      if (datalist) {
-        datalist.innerHTML = Array.from(allExistingCategories).sort().map(c => `<option value="${escapeHtml(c)}">`).join('');
+    /* Strictly populate dropdowns with ONLY existing categories and existing subtags per category */
+    function populateNewCardDropdowns() {
+      const catSelect = document.getElementById('newCardCategorySelect');
+      if (!catSelect) return;
+
+      const sortedCats = Array.from(allExistingCategories).sort();
+      if (sortedCats.length === 0) {
+        catSelect.innerHTML = `<option value="">-- No tags in file --</option>`;
+        syncNewCardSubtagDropdown();
+        return;
+      }
+
+      const prevSelected = catSelect.value;
+      catSelect.innerHTML = sortedCats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      if (prevSelected && sortedCats.includes(prevSelected)) {
+        catSelect.value = prevSelected;
+      }
+      syncNewCardSubtagDropdown();
+    }
+
+    function syncNewCardSubtagDropdown() {
+      const catSelect = document.getElementById('newCardCategorySelect');
+      const subSelect = document.getElementById('newCardSubtagSelect');
+      if (!catSelect || !subSelect) return;
+
+      const selectedCat = catSelect.value;
+      const subs = (categoryToSubtagsMap[selectedCat] || []).slice().sort();
+
+      if (subs.length === 0) {
+        subSelect.innerHTML = `<option value="">-- No subtags for this tag --</option>`;
+      } else {
+        subSelect.innerHTML = subs.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
       }
     }
 
@@ -768,7 +808,7 @@
         txtView.classList.remove('hidden');
         document.getElementById('rawTextArea').value = fileContent;
       } else if (viewName === 'addCard') {
-        populateNewCardCategories();
+        populateNewCardDropdowns();
         addCardView.classList.remove('hidden');
         document.getElementById('newCardTitle')?.focus();
       } else {
@@ -784,32 +824,23 @@
 
     function clearNewCardForm() {
       document.getElementById('newCardTitle').value = '';
-      document.getElementById('newCardCategory').value = 'META TAGS';
-      document.getElementById('newCardSubtags').value = '';
       document.getElementById('newCardBody').innerHTML = '';
+      populateNewCardDropdowns();
       updateWordCount();
     }
 
     function submitNewCardFromTab() {
       const titleInput = document.getElementById('newCardTitle').value.trim();
-      const catInput = (document.getElementById('newCardCategory').value.trim() || 'META TAGS').toUpperCase();
-      const subtagsRaw = document.getElementById('newCardSubtags').value.trim();
+      const catInput = document.getElementById('newCardCategorySelect').value.trim();
+      const subtagVal = document.getElementById('newCardSubtagSelect').value.trim();
       const bodyHtml = document.getElementById('newCardBody').innerHTML.trim();
 
       const title = titleInput || 'New Lore Entry';
-      const body = bodyHtml || 'Write your entry content here...';
-      const subtags = subtagsRaw
-        ? subtagsRaw.split(/[|,]/).map(s => s.trim()).filter(Boolean)
-        : ['General'];
-
-      allExistingCategories.add(catInput);
-      if (!categoryToSubtagsMap[catInput]) categoryToSubtagsMap[catInput] = [];
-      subtags.forEach(sub => {
-        allExistingTags.add(sub);
-        if (!categoryToSubtagsMap[catInput].includes(sub)) {
-          categoryToSubtagsMap[catInput].push(sub);
-        }
-      });
+      const body = bodyHtml || '';
+      const dynamicTags = {};
+      if (catInput && subtagVal) {
+        dynamicTags[catInput] = [subtagVal];
+      }
 
       const today = new Date().toISOString().split('T')[0];
       const newEntry = {
@@ -817,11 +848,12 @@
         title,
         body,
         tags: [],
-        dynamicTags: { [catInput]: subtags },
+        dynamicTags,
         lastEdited: today,
         raw: ''
       };
 
+      applyLoreSubgroupAutoTags(newEntry);
       parsedEntries.unshift(newEntry);
       clearNewCardForm();
       serializeAndSync(true);
@@ -912,6 +944,202 @@
       URL.revokeObjectURL(url);
     }
 
+    /* Get all subtags belonging to LORE TAGS subgroup */
+    function getLoreSubgroupTerms() {
+      const loreTerms = [];
+      for (const [cat, subs] of Object.entries(categoryToSubtagsMap)) {
+        if (cat.toUpperCase().includes('LORE')) {
+          (subs || []).forEach(s => {
+            if (s && !loreTerms.includes(s)) loreTerms.push(s);
+          });
+        }
+      }
+      return loreTerms;
+    }
+
+    /* Automatically add matching word/phrase subtags from LORE TAGS subgroup to an entry */
+    function applyLoreSubgroupAutoTags(entry) {
+      const loreTerms = getLoreSubgroupTerms();
+      if (!entry || loreTerms.length === 0) return false;
+
+      const plainBody = htmlToPlainTextWithBreaks(entry.body);
+      if (!plainBody) return false;
+
+      const loreCatKey = Object.keys(categoryToSubtagsMap).find(k => k.toUpperCase().includes('LORE')) || 'LORE TAGS';
+      if (!entry.dynamicTags[loreCatKey]) entry.dynamicTags[loreCatKey] = [];
+
+      let addedAny = false;
+      loreTerms.forEach(term => {
+        const escaped = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const regex = new RegExp(`(^|[^a-zA-Z0-9_-])(${escaped})($|[^a-zA-Z0-9_-])`, 'i');
+        if (regex.test(plainBody) && !entry.dynamicTags[loreCatKey].some(v => v.toLowerCase() === term.toLowerCase())) {
+          entry.dynamicTags[loreCatKey].push(term);
+          addedAny = true;
+        }
+      });
+
+      return addedAny;
+    }
+
+    /* Detect potential new capitalized phrases/words in entry bodies not yet in existing tags */
+    function findUnlistedCandidateTermsInEntries(entriesToScan) {
+      const existingLower = new Set(Array.from(allExistingTags).map(t => t.toLowerCase()));
+      const candidatesMap = new Map(); // lowerKey -> { term, entryIds: Set }
+
+      const phraseRegex = /\b([A-Z][a-zA-Z0-9'-]*(?:\s+(?:of|the|and|for|in|to|a|an|[A-Z][a-zA-Z0-9'-]*)){0,3}[A-Z][a-zA-Z0-9'-]*|\b[A-Z][a-zA-Z0-9'-]{2,})\b/g;
+
+      entriesToScan.forEach(entry => {
+        const text = htmlToPlainTextWithBreaks(entry.body);
+        if (!text) return;
+        let match;
+        while ((match = phraseRegex.exec(text)) !== null) {
+          const candidate = match[0].trim();
+          if (candidate.length < 3) continue;
+          const lower = candidate.toLowerCase();
+          if (existingLower.has(lower)) continue;
+
+          const alreadyOnEntry = Object.values(entry.dynamicTags || {})
+            .flat()
+            .some(t => t.toLowerCase() === lower);
+          if (alreadyOnEntry) continue;
+
+          if (!candidatesMap.has(lower)) {
+            candidatesMap.set(lower, { term: candidate, entryIds: new Set([entry.id]) });
+          } else {
+            candidatesMap.get(lower).entryIds.add(entry.id);
+          }
+        }
+      });
+
+      return Array.from(candidatesMap.values()).map(item => ({
+        term: item.term,
+        category: 'LORE TAGS',
+        entryIds: Array.from(item.entryIds)
+      }));
+    }
+
+    function showNewTagAlertBanner() {
+      const banner = document.getElementById('newTagAlertBanner');
+      const textEl = document.getElementById('newTagAlertText');
+      if (!banner || !textEl) return;
+
+      if (detectedNewTagsQueue.length === 0) {
+        banner.classList.add('hidden');
+        return;
+      }
+
+      const preview = detectedNewTagsQueue.slice(0, 5).map(d => d.term).join(', ');
+      const extra = detectedNewTagsQueue.length > 5 ? ` +${detectedNewTagsQueue.length - 5} more` : '';
+      textEl.textContent = `Found ${detectedNewTagsQueue.length} potential new tag(s): ${preview}${extra}`;
+      banner.classList.remove('hidden');
+    }
+
+    function dismissNewTagBanner() {
+      document.getElementById('newTagAlertBanner')?.classList.add('hidden');
+    }
+
+    function openDetectedNewTagsModal() {
+      if (detectedNewTagsQueue.length === 0) {
+        alert('No new tags pending review.');
+        return;
+      }
+
+      const catOptions = Array.from(allExistingCategories).sort();
+      const rowsHtml = detectedNewTagsQueue.map((item, idx) => {
+        const selectOptions = (catOptions.length > 0 ? catOptions : ['LORE TAGS'])
+          .map(c => `<option value="${escapeHtml(c)}" ${c.toUpperCase().includes('LORE') ? 'selected' : ''}>${escapeHtml(c)}</option>`)
+          .join('');
+        return `
+          <label class="flex items-center justify-between gap-2 bg-[#06070a] border border-neutral-800 rounded-lg px-3 py-2 text-xs">
+            <div class="flex items-center gap-2 min-w-0">
+              <input type="checkbox" class="new-tag-check accent-emerald-400" data-idx="${idx}" checked>
+              <span class="font-bold text-amber-300 truncate">${escapeHtml(item.term)}</span>
+              <span class="text-[10px] text-neutral-400 flex-shrink-0">(${item.entryIds.length} card${item.entryIds.length > 1 ? 's' : ''})</span>
+            </div>
+            <select class="new-tag-cat bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-[11px] text-cyan-300" data-idx="${idx}">
+              ${selectOptions}
+            </select>
+          </label>
+        `;
+      }).join('');
+
+      openModal('Review Detected New Tags', `
+        <p class="text-[11px] text-neutral-300">Check the tags you want to add and save directly into your file:</p>
+        <div class="max-h-64 overflow-y-auto space-y-2 pr-1 custom-scrollbar">${rowsHtml}</div>
+      `, () => {
+        const checks = document.querySelectorAll('.new-tag-check');
+        const selects = document.querySelectorAll('.new-tag-cat');
+        let addedCount = 0;
+
+        checks.forEach(chk => {
+          if (!chk.checked) return;
+          const idx = parseInt(chk.getAttribute('data-idx'), 10);
+          const item = detectedNewTagsQueue[idx];
+          if (!item) return;
+
+          const chosenCat = (selects[idx]?.value || item.category || 'LORE TAGS').trim();
+          allExistingCategories.add(chosenCat.toUpperCase());
+          allExistingTags.add(item.term);
+          if (!categoryToSubtagsMap[chosenCat]) categoryToSubtagsMap[chosenCat] = [];
+          if (!categoryToSubtagsMap[chosenCat].includes(item.term)) {
+            categoryToSubtagsMap[chosenCat].push(item.term);
+          }
+
+          item.entryIds.forEach(eid => {
+            const entry = parsedEntries.find(e => e.id === eid);
+            if (entry) {
+              if (!entry.dynamicTags[chosenCat]) entry.dynamicTags[chosenCat] = [];
+              if (!entry.dynamicTags[chosenCat].includes(item.term)) {
+                entry.dynamicTags[chosenCat].push(item.term);
+              }
+            }
+          });
+          addedCount++;
+        });
+
+        detectedNewTagsQueue = [];
+        dismissNewTagBanner();
+
+        if (addedCount > 0) {
+          serializeAndSync(true);
+          showFullDocument();
+          alert(`Added ${addedCount} new tag(s) and updated file content. Click "Save Drive" when ready to push to Drive.`);
+        }
+      });
+    }
+
+    function runBulkTagScan() {
+      if (parsedEntries.length === 0) {
+        alert('Load a lore file first to run a bulk tag scan.');
+        return;
+      }
+
+      let autoAddedCount = 0;
+      parsedEntries.forEach(entry => {
+        if (applyLoreSubgroupAutoTags(entry)) {
+          autoAddedCount++;
+        }
+      });
+
+      detectedNewTagsQueue = findUnlistedCandidateTermsInEntries(parsedEntries);
+
+      if (autoAddedCount > 0) {
+        serializeAndSync(true);
+        showFullDocument();
+      }
+
+      if (detectedNewTagsQueue.length > 0) {
+        showNewTagAlertBanner();
+        openDetectedNewTagsModal();
+      } else {
+        alert(
+          autoAddedCount > 0
+            ? `Bulk scan finished: auto-applied LORE TAGS subgroup matches on ${autoAddedCount} card(s). No new unlisted tags detected.`
+            : 'Bulk scan finished: no new LORE TAGS matches or unlisted candidate tags detected.'
+        );
+      }
+    }
+
     function parseLoreContent(text, updateTextArea = true) {
       if (!text || text.trim().length === 0) return;
 
@@ -920,10 +1148,7 @@
       parsedEntries = [];
       allExistingTags.clear();
       categoryToSubtagsMap = {};
-      allExistingCategories.add('PETA TAGS');
-      allExistingCategories.add('META TAGS');
-      allExistingCategories.add('LORE TAGS');
-      allExistingCategories.add('RELATIONS TAGS');
+      allExistingCategories.clear();
 
       const parts = text.split(/={10,}/);
       if (parts.length > 0) {
@@ -934,8 +1159,7 @@
       if (tagPart) {
         masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: tagPart.replace(/THE MASTER TAG LIST/i, '').trim(), lastEdited: 'Archive' };
         
-        let currentCat = 'META TAGS';
-        categoryToSubtagsMap[currentCat] = [];
+        let currentCat = null;
         const tagLines = tagPart.split('\n');
         
         tagLines.forEach(l => {
@@ -947,8 +1171,7 @@
               allExistingCategories.add(currentCat);
               if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
             }
-          } else if (lt && !lt.startsWith('[') && !lt.includes('[')) {
-            if (!categoryToSubtagsMap[currentCat]) categoryToSubtagsMap[currentCat] = [];
+          } else if (lt && !lt.startsWith('[') && !lt.includes('[') && currentCat) {
             if (!categoryToSubtagsMap[currentCat].includes(lt)) {
               categoryToSubtagsMap[currentCat].push(lt);
             }
@@ -956,7 +1179,7 @@
           }
         });
       } else {
-        masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: '[PETA TAGS]\nPlaces\n\n[META TAGS]\nOriginal\nFan-Fiction', lastEdited: 'Archive' };
+        masterTagListEntry = { id: 'tags', title: 'THE MASTER TAG LIST', body: '', lastEdited: 'Archive' };
       }
 
       rawEntryBlocks.forEach((block) => {
@@ -985,10 +1208,17 @@
           if (match) {
             const cat = match[1].trim();
             if (!cat.toUpperCase().includes('LAST EDITED')) {
-              allExistingCategories.add(cat.toUpperCase());
+              const upperCat = cat.toUpperCase();
+              allExistingCategories.add(upperCat);
               const vals = match[2].split('|').map(s => s.trim()).filter(Boolean);
               dynamicTags[cat] = vals;
-              vals.forEach(v => allExistingTags.add(v));
+              if (!categoryToSubtagsMap[upperCat]) categoryToSubtagsMap[upperCat] = [];
+              vals.forEach(v => {
+                allExistingTags.add(v);
+                if (!categoryToSubtagsMap[upperCat].includes(v)) {
+                  categoryToSubtagsMap[upperCat].push(v);
+                }
+              });
             }
           }
         });
@@ -1004,10 +1234,13 @@
         const body = bodyLines.join('\n').trim();
         const tags = (block.match(/#[a-zA-Z0-9_-]+/g) || []).map(t => t.substring(1));
 
-        parsedEntries.push({ id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block });
+        const entryObj = { id: parsedEntries.length, title, body, tags, dynamicTags, lastEdited, raw: block };
+        applyLoreSubgroupAutoTags(entryObj);
+        parsedEntries.push(entryObj);
       });
 
       parsedEntries.sort((a, b) => new Date(b.lastEdited) - new Date(a.lastEdited));
+      populateNewCardDropdowns();
 
       if (updateTextArea) {
         const rawTextArea = document.getElementById('rawTextArea');
@@ -1059,6 +1292,7 @@
         if (rawTextArea) rawTextArea.value = fileContent;
         if (setDirtyFlag) markDirty();
       }
+      populateNewCardDropdowns();
       renderSidebarList(parsedEntries);
       updateWordCount();
     }
@@ -1077,7 +1311,9 @@
       if (entry && entry.body !== newBodyHtml.trim()) {
         entry.body = newBodyHtml.trim();
         entry.lastEdited = new Date().toISOString().split('T')[0];
+        applyLoreSubgroupAutoTags(entry);
         serializeAndSync(true);
+        showFullDocument();
       }
     }
 
@@ -1170,25 +1406,18 @@
     }
 
     function updateModalTagDropdown() {
-      const catInput = document.getElementById('modalCatVal');
-      const datalist = document.getElementById('existingTagsList');
-      if (!datalist) return;
+      const catSelect = document.getElementById('modalCatSelect');
+      const subSelect = document.getElementById('modalTagSelect');
+      if (!subSelect) return;
 
-      const enteredCat = catInput ? catInput.value.trim().toUpperCase() : '';
-      let availableTags = [];
+      const selectedCat = catSelect ? catSelect.value : '';
+      const availableTags = (categoryToSubtagsMap[selectedCat] || []).slice().sort();
 
-      if (!enteredCat) {
-        availableTags = Array.from(allExistingTags);
+      if (availableTags.length === 0) {
+        subSelect.innerHTML = `<option value="">-- No existing subtags for this tag --</option>`;
       } else {
-        const matchedKey = Object.keys(categoryToSubtagsMap).find(k => k.includes(enteredCat));
-        if (matchedKey && categoryToSubtagsMap[matchedKey]) {
-          availableTags = categoryToSubtagsMap[matchedKey];
-        } else {
-          availableTags = [];
-        }
+        subSelect.innerHTML = availableTags.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
       }
-
-      datalist.innerHTML = availableTags.sort().map(t => `<option value="${escapeHtml(t)}">`).join('');
     }
 
     function promptAddTag(entryId, defaultCategory) {
@@ -1196,36 +1425,31 @@
       if (!entry) return;
 
       const isPetaOnly = defaultCategory === 'PETA TAGS';
-      const catOptionsHtml = Array.from(allExistingCategories).sort().map(c => `<option value="${escapeHtml(c)}">`).join('');
+      const sortedCats = Array.from(allExistingCategories).sort();
+      const catOptionsHtml = sortedCats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 
       const bodyHtml = `
         ${!isPetaOnly ? `
         <div class="space-y-2 pb-1">
-          <label class="text-[11px] text-neutral-300 font-medium">Main Tag Category (leave blank for all tags):</label>
-          <input type="text" id="modalCatVal" list="existingCatsList" placeholder="e.g. META TAGS" oninput="updateModalTagDropdown()" class="w-full bg-[#06070a] border border-neutral-700 rounded px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:border-emerald-400">
-          <datalist id="existingCatsList">${catOptionsHtml}</datalist>
+          <label class="text-[11px] text-neutral-300 font-medium">Existing Main Tag:</label>
+          <select id="modalCatSelect" onchange="updateModalTagDropdown()" class="w-full bg-[#06070a] border border-neutral-700 rounded px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:border-emerald-400">
+            ${catOptionsHtml || '<option value="">-- No tags in file --</option>'}
+          </select>
         </div>` : ''}
         <div class="space-y-2">
-          <label class="text-[11px] text-neutral-300 font-medium">Tag Value (Subtag):</label>
-          <input type="text" id="modalTagVal" list="existingTagsList" placeholder="Select or type tag..." class="w-full bg-[#06070a] border border-neutral-700 rounded px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:border-emerald-400">
-          <datalist id="existingTagsList"></datalist>
+          <label class="text-[11px] text-neutral-300 font-medium">Existing Subtag:</label>
+          <select id="modalTagSelect" class="w-full bg-[#06070a] border border-neutral-700 rounded px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:border-emerald-400"></select>
         </div>
       `;
 
-      openModal(isPetaOnly ? 'Add PETA Tag' : 'Add New Tag', bodyHtml, () => {
-        const valInput = document.getElementById('modalTagVal').value.trim();
+      openModal(isPetaOnly ? 'Add PETA Tag' : 'Add Existing Tag', bodyHtml, () => {
+        const valInput = document.getElementById('modalTagSelect').value.trim();
         if (!valInput) return;
-        const category = isPetaOnly ? 'PETA TAGS' : (document.getElementById('modalCatVal') ? document.getElementById('modalCatVal').value.trim().toUpperCase() : 'META TAGS');
+        const category = isPetaOnly ? 'PETA TAGS' : (document.getElementById('modalCatSelect')?.value.trim() || '');
         if (!category) return;
 
         if (!entry.dynamicTags[category]) entry.dynamicTags[category] = [];
         if (!entry.dynamicTags[category].includes(valInput)) entry.dynamicTags[category].push(valInput);
-        
-        allExistingTags.add(valInput);
-        if (!categoryToSubtagsMap[category]) categoryToSubtagsMap[category] = [];
-        if (!categoryToSubtagsMap[category].includes(valInput)) {
-          categoryToSubtagsMap[category].push(valInput);
-        }
 
         entry.lastEdited = new Date().toISOString().split('T')[0];
         
@@ -1233,7 +1457,15 @@
         showFullDocument();
       });
 
-      updateModalTagDropdown();
+      if (isPetaOnly) {
+        const petaSubs = (categoryToSubtagsMap['PETA TAGS'] || []).slice().sort();
+        const subSelect = document.getElementById('modalTagSelect');
+        subSelect.innerHTML = petaSubs.length
+          ? petaSubs.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')
+          : `<option value="">-- No PETA subtags in file --</option>`;
+      } else {
+        updateModalTagDropdown();
+      }
     }
 
     function removeTag(entryId, category, tagVal) {
