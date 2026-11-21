@@ -150,7 +150,7 @@
       <div class="flex items-center justify-between border-b border-neutral-800 pb-3 flex-shrink-0 bg-inherit z-10">
         <div class="overflow-hidden">
           <h1 class="text-xs md:text-sm font-black tracking-widest rainbow-text whitespace-nowrap">LORE INDEXOR</h1>
-          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.6 • Rainbow</p>
+          <p id="modeSubtitle" class="text-[9px] text-neutral-400 tracking-wider whitespace-nowrap">Master Archive v5.7 • Rainbow</p>
         </div>
         <button onclick="toggleSidebar()" class="p-2 bg-neutral-900 hover:bg-neutral-800 rounded text-amber-300 hover:text-pink-300 text-xs transition shadow-sm border border-neutral-700" title="Collapse Sidebar">
           <span class="font-bold">◀</span>
@@ -386,7 +386,7 @@
         btn.innerHTML = themeMode === 'darrk' ? '<span>🌑 Darrk</span>' : '<span>🌈 Rainbow</span>';
       }
       if (subtitle) {
-        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.6 • Darrk' : 'Master Archive v5.6 • Rainbow';
+        subtitle.textContent = themeMode === 'darrk' ? 'Master Archive v5.7 • Darrk' : 'Master Archive v5.7 • Rainbow';
       }
     }
 
@@ -898,8 +898,9 @@
         `[Last Edited: ${entry.lastEdited}]`
       ];
       for (const [cat, vals] of Object.entries(entry.dynamicTags || {})) {
-        if (vals && vals.length > 0) {
-          lines.push(`[${cat}]: ${vals.join(' | ')}`);
+        const cleanVals = (vals || []).map(v => v.trim()).filter(Boolean);
+        if (cleanVals.length > 0) {
+          lines.push(`[${cat}]: ${cleanVals.join(' | ')}`);
         }
       }
       lines.push('====================================================================');
@@ -957,7 +958,7 @@
       return loreTerms;
     }
 
-    /* Automatically add matching word/phrase subtags from LORE TAGS subgroup to an entry */
+    /* Automatically add matching word/phrase subtags from LORE TAGS subgroup to an entry without creating empty tag headers */
     function applyLoreSubgroupAutoTags(entry) {
       const loreTerms = getLoreSubgroupTerms();
       if (!entry || loreTerms.length === 0) return false;
@@ -966,17 +967,23 @@
       if (!plainBody) return false;
 
       const loreCatKey = Object.keys(categoryToSubtagsMap).find(k => k.toUpperCase().includes('LORE')) || 'LORE TAGS';
-      if (!entry.dynamicTags[loreCatKey]) entry.dynamicTags[loreCatKey] = [];
+      const existingList = (entry.dynamicTags[loreCatKey] || []).slice();
 
       let addedAny = false;
       loreTerms.forEach(term => {
         const escaped = term.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
         const regex = new RegExp(`(^|[^a-zA-Z0-9_-])(${escaped})($|[^a-zA-Z0-9_-])`, 'i');
-        if (regex.test(plainBody) && !entry.dynamicTags[loreCatKey].some(v => v.toLowerCase() === term.toLowerCase())) {
-          entry.dynamicTags[loreCatKey].push(term);
+        if (regex.test(plainBody) && !existingList.some(v => v.toLowerCase() === term.toLowerCase())) {
+          existingList.push(term);
           addedAny = true;
         }
       });
+
+      if (existingList.length > 0) {
+        entry.dynamicTags[loreCatKey] = existingList;
+      } else {
+        delete entry.dynamicTags[loreCatKey];
+      }
 
       return addedAny;
     }
@@ -1211,14 +1218,16 @@
               const upperCat = cat.toUpperCase();
               allExistingCategories.add(upperCat);
               const vals = match[2].split('|').map(s => s.trim()).filter(Boolean);
-              dynamicTags[cat] = vals;
-              if (!categoryToSubtagsMap[upperCat]) categoryToSubtagsMap[upperCat] = [];
-              vals.forEach(v => {
-                allExistingTags.add(v);
-                if (!categoryToSubtagsMap[upperCat].includes(v)) {
-                  categoryToSubtagsMap[upperCat].push(v);
-                }
-              });
+              if (vals.length > 0) {
+                dynamicTags[cat] = vals;
+                if (!categoryToSubtagsMap[upperCat]) categoryToSubtagsMap[upperCat] = [];
+                vals.forEach(v => {
+                  allExistingTags.add(v);
+                  if (!categoryToSubtagsMap[upperCat].includes(v)) {
+                    categoryToSubtagsMap[upperCat].push(v);
+                  }
+                });
+              }
             }
           }
         });
@@ -1226,6 +1235,8 @@
         const bodyLines = lines.filter(l => {
           const lt = l.trim();
           if (lt.includes('====') || lt.includes('----') || lt.toUpperCase().startsWith('ENTRY:') || lt.includes('Last Edited:')) return false;
+          // Strip stray empty [CATEGORY]: lines so they never repeat inside card bodies
+          if (/^\[\s*[A-Z\s_-]+\s*\]\s*:\s*$/i.test(lt)) return false;
           let match = lt.match(tagLineRegexOutside) || lt.match(tagLineRegexInside);
           if (match && !match[1].toUpperCase().includes('LAST EDITED')) return false;
           return true;
@@ -1280,7 +1291,10 @@
       let entryBlocks = parsedEntries.map(e => {
         let tagLines = "";
         for (const [cat, vals] of Object.entries(e.dynamicTags)) {
-          tagLines += `[${cat}]: ${vals.join(' | ')}\n`;
+          const cleanVals = (vals || []).map(v => v.trim()).filter(Boolean);
+          if (cleanVals.length > 0) {
+            tagLines += `[${cat}]: ${cleanVals.join(' | ')}\n`;
+          }
         }
         return `====================================================================\nENTRY: ${e.title}\n[Last Edited: ${e.lastEdited}]\n${tagLines}\n====================================================================\n\n${e.body}`;
       });
